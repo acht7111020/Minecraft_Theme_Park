@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="fbxloader.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="tinyobjloader.cpp" />
+    <ClCompile Include="Lighting.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="fbxloader.h" />
+    <ClInclude Include="Lighting.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment.fs.glsl" />
+    <None Include="vertex.vs.glsl" />
+    <None Include="fragment2.fs.glsl" />
+    <None Include="vertex2.vs.glsl" />
+    <None Include="fragment0.fs.glsl" />
+    <None Include="vertex0.vs.glsl" />
+  </ItemGroup>
+</Project>
