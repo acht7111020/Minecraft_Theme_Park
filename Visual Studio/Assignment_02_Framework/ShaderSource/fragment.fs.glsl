@@ -265,6 +265,9 @@ void main()
 				fragColor = mix(fragColor, vec4(0.0, 0.3, 0.5, 1.0), 0.5);
 		}
 		else{
+			
+			if(color.a < 0.5)
+				discard;
 			float visibility = shaodowMulti();
 			//fragColor = color * vec4(lightColor,1) ;//* vec4(vec3(visibility), 1);
 

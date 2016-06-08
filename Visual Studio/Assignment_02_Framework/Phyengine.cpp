@@ -122,7 +122,7 @@ coord Phyengine::Walk(){
         shake.x = amplitude / 5;
     else if(shake.x > -amplitude / 5 && shake.x < 0)
         shake.x = -amplitude / 5;
-    t+=0.02;
+    t+=0.01;
     return shake;
 }
 

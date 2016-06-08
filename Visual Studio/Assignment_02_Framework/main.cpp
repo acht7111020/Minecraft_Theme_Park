@@ -1317,7 +1317,7 @@ void Phy_timer(int val){
 	printf("eyeX: %f, eyeY: %f, eyeZ: %f\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
 	printf("pitch_x: %f, yaw_y: %f, roll_z: %f\n", pitch_x, yaw_y, roll_z);
 	float dx = 0, dy = 0, dz = 0;
-	float step = 1.5;
+	float step = 0.75;
 	coord shake;
 	shake.x = 0;
 	shake.y = 0;
@@ -1798,7 +1798,7 @@ int main(int argc, char *argv[])
 	dumpInfo();
 	initParas();
 	My_Init();
-	My_LoadModels("final.obj", 1);
+	My_LoadModels("water.obj", 1);
 	//My_LoadModels("Volleyball.FBX",2);
 	//My_LoadModels("Island/island.fbx", 2 );
 	/*My_LoadModels("zombie_fury.FBX", 2);
