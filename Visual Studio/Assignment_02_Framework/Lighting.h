@@ -37,33 +37,34 @@ vec4(-73.425728f, 358.380005f, -19.493023f, 1), 1);
 
 class Lighting{
 
-	public:
-		Lighting(int lightnumber, int open);
-		//~Lighting();
+public:
+	Lighting(int lightnumber, int open);
+	//~Lighting();
 
-		void LightingGetUniformLocation(GLuint p);
-		void SpotLightingGetUniformLocation(GLuint p);
-		void LightingUniformGiven();
-		void SpotLightingUniformGiven();
-		void ChangeOpenStatus();
-		void SetLight(float* ambient, float* diffuse, float* specular, float* position);
-		void SetSpotLight(vec3 SpotDir, float SpotExp, float SpotCut);
-		vec3 GetLightPosition();
-	private:
-		int lightnum;
-		int lightopen;
-		LightSource lightsource;
+	void LightingGetUniformLocation(GLuint p);
+	void SpotLightingGetUniformLocation(GLuint p);
+	void LightingUniformGiven();
+	void SpotLightingUniformGiven();
+	void ChangeOpenStatus();
+	void SetLight(float* ambient, float* diffuse, float* specular, float* position);
+	void SetSpotLight(vec3 SpotDir, float SpotExp, float SpotCut);
+	vec3 GetLightPosition();
+	void SetLightPosition(vec3 pos);
+private:
+	int lightnum;
+	int lightopen;
+	LightSource lightsource;
 
-		GLuint uniformDiffuse;
-		GLuint uniformAmbient;
-		GLuint uniformSpecular;
-		GLuint uniformPosition;
-		GLuint uniformopen;
+	GLuint uniformDiffuse;
+	GLuint uniformAmbient;
+	GLuint uniformSpecular;
+	GLuint uniformPosition;
+	GLuint uniformopen;
 
-		//Spot light
-		GLuint uniformSpotDir;
-		GLuint uniformSpotCut;
-		GLuint uniformSpotExp;
-		GLuint uniformSpotCutCos;
+	//Spot light
+	GLuint uniformSpotDir;
+	GLuint uniformSpotCut;
+	GLuint uniformSpotExp;
+	GLuint uniformSpotCutCos;
 
 };

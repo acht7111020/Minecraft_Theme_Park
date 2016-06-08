@@ -58,18 +58,18 @@ Lighting::SpotLightingGetUniformLocation(GLuint p){
 
 void
 Lighting::LightingUniformGiven(){
-	
-	glUniform4fv(uniformAmbient, 1, value_ptr(lightsource.ambient) );
-	glUniform4fv(uniformPosition, 1, value_ptr(lightsource.position) );
-	glUniform4fv(uniformDiffuse, 1, value_ptr(lightsource.diffuse) );
-	glUniform4fv(uniformSpecular, 1, value_ptr(lightsource.specular) );
+
+	glUniform4fv(uniformAmbient, 1, value_ptr(lightsource.ambient));
+	glUniform4fv(uniformPosition, 1, value_ptr(lightsource.position));
+	glUniform4fv(uniformDiffuse, 1, value_ptr(lightsource.diffuse));
+	glUniform4fv(uniformSpecular, 1, value_ptr(lightsource.specular));
 	glUniform1i(uniformopen, lightopen);
 
 }
 
 void
 Lighting::SpotLightingUniformGiven(){
-	glUniform4fv(uniformSpotDir, 1, value_ptr(lightsource.spotDirection) );
+	glUniform4fv(uniformSpotDir, 1, value_ptr(lightsource.spotDirection));
 	glUniform1f(uniformSpotExp, lightsource.spotExponent);
 	glUniform1f(uniformSpotCut, lightsource.spotCutoff);
 
@@ -82,7 +82,7 @@ Lighting::ChangeOpenStatus(){
 
 void
 Lighting::SetLight(float* ambient, float* diffuse, float* specular, float* position){
-	
+
 	lightsource.position = vec4(position[0], position[1], position[2], position[3]);
 	lightsource.ambient = vec4(ambient[0], ambient[1], ambient[2], ambient[3]);
 	lightsource.diffuse = vec4(diffuse[0], diffuse[1], diffuse[2], diffuse[3]);
@@ -91,7 +91,7 @@ Lighting::SetLight(float* ambient, float* diffuse, float* specular, float* posit
 
 void
 Lighting::SetSpotLight(vec3 SpotDir, float SpotExp, float SpotCut){
-	
+
 	lightsource.spotDirection = vec4(SpotDir, 1);
 	lightsource.spotExponent = SpotExp;
 	lightsource.spotCutoff = SpotCut;
@@ -100,6 +100,13 @@ Lighting::SetSpotLight(vec3 SpotDir, float SpotExp, float SpotCut){
 vec3
 Lighting::GetLightPosition(){
 
-	return vec3(lightsource.position[0], lightsource.position[1], lightsource.position[2]);
-	
+	return vec3(lightsource.position);
+
+}
+
+void
+Lighting::SetLightPosition(vec3 pos){
+	lightsource.position.x += pos.x;
+	lightsource.position.y += pos.y;
+	lightsource.position.z += pos.z;
 }

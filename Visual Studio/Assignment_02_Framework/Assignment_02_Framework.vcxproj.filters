@@ -5,17 +5,23 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="tinyobjloader.cpp" />
     <ClCompile Include="Lighting.cpp" />
+    <ClCompile Include="Phyengine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fbxloader.h" />
     <ClInclude Include="Lighting.h" />
+    <ClInclude Include="Phyengine.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="fragment.fs.glsl" />
-    <None Include="vertex.vs.glsl" />
-    <None Include="fragment2.fs.glsl" />
-    <None Include="vertex2.vs.glsl" />
-    <None Include="fragment0.fs.glsl" />
-    <None Include="vertex0.vs.glsl" />
+    <None Include="ShaderSource\depth.fs.glsl" />
+    <None Include="ShaderSource\depth.vs.glsl" />
+    <None Include="ShaderSource\fragment.fs.glsl" />
+    <None Include="ShaderSource\framebuffer.fs.glsl" />
+    <None Include="ShaderSource\framebuffer.vs.glsl" />
+    <None Include="ShaderSource\skybox.fs.glsl" />
+    <None Include="ShaderSource\skybox.vs.glsl" />
+    <None Include="ShaderSource\vertex.vs.glsl" />
+    <None Include="ShaderSource\water.fs.glsl" />
+    <None Include="ShaderSource\water.vs.glsl" />
   </ItemGroup>
 </Project>
