@@ -47,8 +47,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)\..\VCLibs\glm;$(SolutionDir)\..\VCLibs\freeglut;$(SolutionDir)\..\VCLibs\glew;$(SolutionDir)\..\VCLibs\texture_loader;$(SolutionDir)\..\VCLibs\fbxsdk;$(SolutionDir)\..\VCLibs\devil;$(SolutionDir)\..\VCLibs\tinyobjloader;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)\..\VCLibs\freeglut;$(SolutionDir)\..\VCLibs\glew;$(SolutionDir)\..\VCLibs\texture_loader;$(SolutionDir)\..\VCLibs\fbxsdk;$(SolutionDir)\..\VCLibs\devil;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)\..\VCLibs\glm;$(SolutionDir)\..\VCLibs\freeglut;$(SolutionDir)\..\VCLibs\glfw;$(SolutionDir)\..\VCLibs\glew;$(SolutionDir)\..\VCLibs\texture_loader;$(SolutionDir)\..\VCLibs\fbxsdk;$(SolutionDir)\..\VCLibs\devil;$(SolutionDir)\..\VCLibs\tinyobjloader;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)\..\VCLibs\freeglut;$(SolutionDir)\..\VCLibs\glew;$(SolutionDir)\..\VCLibs\glflw\lib-vc2010-32;$(SolutionDir)\..\VCLibs\texture_loader;$(SolutionDir)\..\VCLibs\fbxsdk;$(SolutionDir)\..\VCLibs\devil;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -79,11 +79,15 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>opengl32.lib;freeglut.lib;glew32.lib;libfbxsdk.lib;devil.lib;jpeg.lib;libpng16.lib;texture_loader.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;freeglut.lib;glew32.lib;libfbxsdk.lib;devil.lib;jpeg.lib;libpng16.lib;texture_loader.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="fbxloader.cpp" />
+    <ClCompile Include="GUI\imgui.cpp" />
+    <ClCompile Include="GUI\imgui_demo.cpp" />
+    <ClCompile Include="GUI\imgui_draw.cpp" />
+    <ClCompile Include="GUI\imgui_impl_glfw.cpp" />
     <ClCompile Include="Lighting.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Phyengine.cpp" />
@@ -91,6 +95,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fbxloader.h" />
+    <ClInclude Include="GUI\imconfig.h" />
+    <ClInclude Include="GUI\imgui.h" />
+    <ClInclude Include="GUI\imgui_impl_glfw.h" />
+    <ClInclude Include="GUI\imgui_internal.h" />
+    <ClInclude Include="GUI\stb_rect_pack.h" />
+    <ClInclude Include="GUI\stb_textedit.h" />
+    <ClInclude Include="GUI\stb_truetype.h" />
     <ClInclude Include="Lighting.h" />
     <ClInclude Include="Phyengine.h" />
   </ItemGroup>

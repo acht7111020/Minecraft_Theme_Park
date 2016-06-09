@@ -10,9 +10,11 @@
 #include <IL/il.h>
 #include <texture_loader.h>
 #include "Lighting.h"
-
 #include "Phyengine.h"
 
+#include "GUI/imgui.h"
+#include "GUI/imgui_impl_glfw.h"
+#include <GLFW/glfw3.h>
 /*
 Bonus part (Embossion, Constant)
 https://github.com/yulu/GLtext
@@ -101,7 +103,7 @@ struct MouseButton{
 	GLfloat end[2];
 	int flag = 0;
 } mouseLeft, mouseCompare;
-float timer_cnt = 0;
+int timer_cnt = 0;
 bool timer_enabled = true;
 unsigned int timer_speed = 16;
 int selectModel = 1, changing = 0; vec3 rotate_vector;
@@ -191,6 +193,12 @@ float moveFactor = 0.0f;
 
 GLuint normalTexture;
 const string NOR_MAP = "normalMap.png";
+
+/* GUI */
+GLuint guitestFb;
+int createWindowFlag = 0;
+GLFWwindow* glfwwindow;
+int glfwcounter = 0;
 
 // frame buffer
 GLuint fb_vao;
@@ -453,6 +461,11 @@ void Init_FBO(){
 	refractionDb = createDepthTexture(image_size[0], image_size[1]);
 	unbindCurrentFrameBuffer();
 
+	guitestFb = createFramebuffer();
+	guitestFb = createDepthBuffer(image_size[0], image_size[1]);
+	guitestFb = createTextureAttachment(image_size[0], image_size[1]);
+	unbindCurrentFrameBuffer();
+
 
 }
 
@@ -688,7 +701,7 @@ void My_LoadModels(char* filename, int flag)
 			MaterialParameters submat;
 			for (int z = 0; z < 3; z++){
 				submat.ambient[z] = (materials[i].ambient[z] == 0) ? 1 : materials[i].ambient[z];
-				submat.diffuse[z] = (materials[i].diffuse[z] == 0) ? 1 : materials[i].diffuse[z];
+				submat.diffuse[z] = (materials[i].diffuse[z] == 0) ? 0.5 : materials[i].diffuse[z];
 				submat.specular[z] = materials[i].specular[z];
 			}
 			submat.ambient[3] = 1; submat.diffuse[3] = 1; submat.specular[3] = 1;
@@ -1091,6 +1104,61 @@ void Display_water(int id, int j, vec3 pos, float* scale_bias, float* plane, GLu
 
 }
 
+static void error_callback(int error, const char* description)
+{
+	fprintf(stderr, "Error %d: %s\n", error, description);
+}
+
+void Display_GUI(){
+
+	/*bindFrameBuffer(guitestFb, image_size[0], image_size[1]);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
+
+	if (createWindowFlag != 1){
+
+		glfwSetErrorCallback(error_callback);
+		glfwInit();
+		glfwwindow = glfwCreateWindow(400, 400, "ImGui OpenGL2 example", NULL, NULL);
+		glfwMakeContextCurrent(glfwwindow);
+		// Setup ImGui binding
+		ImGui_ImplGlfw_Init(glfwwindow, true);
+		createWindowFlag = 1;
+		 
+	}
+
+	if (!glfwWindowShouldClose(glfwwindow) && timer_cnt%10 == 0){
+		glfwPollEvents();
+		ImGui_ImplGlfw_NewFrame();
+		const char* test = "test";
+		bool* p_open = NULL;
+		ImVec4 clear_color = ImColor(114, 144, 154);
+		ImGui::Begin(test, p_open, ImVec2(0, 0), -1.0f, 0);
+		{
+			ImGui::SetWindowPos(ImVec2(0, 0));
+			static float f = 0.0f;
+			ImGui::Text("Hello, world!");
+			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
+			ImGui::ColorEdit3("clear color", (float*)&clear_color);
+			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		}
+		ImGui::End();
+		//// Rendering
+		//int display_w, display_h;
+		//glfwGetFramebufferSize(glfwwindow, &display_w, &display_h);
+		//glViewport(0, 0, display_w, display_h);
+		glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+		glClear(GL_COLOR_BUFFER_BIT);
+		ImGui::Render();
+		glfwSwapBuffers(glfwwindow);
+	}
+	
+
+	/*unbindCurrentFrameBuffer();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+*/
+}
 
 // GLUT callback. Called to draw the scene.
 void My_Display()
@@ -1146,7 +1214,8 @@ void My_Display()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	
+	/* Display Gui */
+	// Display_GUI();
 	
 
 	// Clear part
@@ -1229,7 +1298,7 @@ void My_Display()
 	Display_water(0, 3, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), reflectionTexture, refractionTexture);
 
 	/*glActiveTexture(GL_TEXTURE0);
-	Display_texture(reflectionTexture, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
+	Display_texture(guitestFb, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
 	Display_texture(refractionTexture, fb_vao, program2, vec2(0.5, 0.5), vec2(0.25, 0.25));*/
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
@@ -1310,12 +1379,13 @@ void My_Timer(int val)
 	{
 		glutTimerFunc(timer_speed, My_Timer, val);
 	}
+	
 }
 
 void Phy_timer(int val){
 	const float speed = 0.3f;
-	printf("eyeX: %f, eyeY: %f, eyeZ: %f\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
-	printf("pitch_x: %f, yaw_y: %f, roll_z: %f\n", pitch_x, yaw_y, roll_z);
+	/*printf("eyeX: %f, eyeY: %f, eyeZ: %f\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
+	printf("pitch_x: %f, yaw_y: %f, roll_z: %f\n", pitch_x, yaw_y, roll_z);*/
 	float dx = 0, dy = 0, dz = 0;
 	float step = 0.75;
 	coord shake;
@@ -1744,15 +1814,15 @@ void initTextures(char* name, int flag)
 void setLightingSource(){
 
 	vec4 ambient = { 0.1f, 0.1f, 0.1f, 1 };
-	vec4 diffuse = { 0.3f, 0.3f, 0.3f, 1 };
-	vec4 specular = { 1, 1, 1, 1 };
+	vec4 diffuse = { 0.03f, 0.03f, 0.03f, 1 };
+	vec4 specular = { 0.5, 0.5, 0.5, 1 };
 	//vec4 position = { -300.0f, 2202.0f, -44.0f, 1 };
 	vec4 position = { 44.0f, 350.0f, 179.0f, 1 };
 	pointlight = new Lighting(0, 1);
 	pointlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 
-	ambient = { 0.04f, 0.04f, 0.04f, 1 };
-	diffuse = { 0.5f, 0.5f, 0.5f, 1 };
+	ambient = { 0.08f, 0.08f, 0.08f, 1 };
+	diffuse = { 0.01f, 0.01f, 0.01f, 1 };
 	specular = { 1, 1, 1, 1 };
 	//position = { -900.0f, 404.0f, -44.0f, 0 };
 	//position = { 420.0f, 5344.0f, -44.0f, 0 };
@@ -1791,6 +1861,7 @@ int main(int argc, char *argv[])
 	glutInitWindowPosition(100, 100);
 	glutInitWindowSize(1200, 720);
 	glutCreateWindow("Assignment 03 102062222"); // You cannot use OpenGL functions before this line; The OpenGL context must be created first by glutCreateWindow()!
+	
 	glewInit();
 	ilInit();
 	ilEnable(IL_ORIGIN_SET);
@@ -1801,9 +1872,9 @@ int main(int argc, char *argv[])
 	My_LoadModels("water.obj", 1);
 	//My_LoadModels("Volleyball.FBX",2);
 	//My_LoadModels("Island/island.fbx", 2 );
-	/*My_LoadModels("zombie_fury.FBX", 2);
-	My_LoadModels("zombie_walk.FBX", 2);
-	My_LoadModels("zombie_dead.FBX", 2);*/
+	//My_LoadModels("zombie_fury.FBX", 2);
+	//My_LoadModels("zombie_walk.FBX", 2);
+	//My_LoadModels("zombie_dead.FBX", 2);
 
 	////////////////////
 
@@ -1863,6 +1934,7 @@ int main(int argc, char *argv[])
 	glutKeyboardUpFunc(KeyUp);
 	glutTimerFunc(phy_timer_speed, Phy_timer, 0);
 	///////////////////////////////
+
 
 	// Enter main event loop.
 	//////////////

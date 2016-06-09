@@ -6,11 +6,44 @@
     <ClCompile Include="tinyobjloader.cpp" />
     <ClCompile Include="Lighting.cpp" />
     <ClCompile Include="Phyengine.cpp" />
+    <ClCompile Include="GUI\imgui.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="GUI\imgui_demo.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="GUI\imgui_draw.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="GUI\imgui_impl_glfw.cpp">
+      <Filter>GUI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fbxloader.h" />
     <ClInclude Include="Lighting.h" />
     <ClInclude Include="Phyengine.h" />
+    <ClInclude Include="GUI\imconfig.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\imgui.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\imgui_internal.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\stb_rect_pack.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\stb_textedit.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\stb_truetype.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI\imgui_impl_glfw.h">
+      <Filter>GUI</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="ShaderSource\depth.fs.glsl" />
@@ -23,5 +56,10 @@
     <None Include="ShaderSource\vertex.vs.glsl" />
     <None Include="ShaderSource\water.fs.glsl" />
     <None Include="ShaderSource\water.vs.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="GUI">
+      <UniqueIdentifier>{3ceacc90-58c7-4dec-8615-dca45c60de4b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>
