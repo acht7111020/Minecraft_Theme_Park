@@ -46,20 +46,55 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="ShaderSource\depth.fs.glsl" />
-    <None Include="ShaderSource\depth.vs.glsl" />
-    <None Include="ShaderSource\fragment.fs.glsl" />
-    <None Include="ShaderSource\framebuffer.fs.glsl" />
-    <None Include="ShaderSource\framebuffer.vs.glsl" />
-    <None Include="ShaderSource\skybox.fs.glsl" />
-    <None Include="ShaderSource\skybox.vs.glsl" />
-    <None Include="ShaderSource\vertex.vs.glsl" />
-    <None Include="ShaderSource\water.fs.glsl" />
-    <None Include="ShaderSource\water.vs.glsl" />
+    <None Include="ShaderSource\black.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\black.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\bloom.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\bloom.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\depth.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\depth.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\fragment.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\framebuffer.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\framebuffer.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\skybox.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\skybox.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\vertex.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\water.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\water.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="GUI">
       <UniqueIdentifier>{3ceacc90-58c7-4dec-8615-dca45c60de4b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{54240d20-0c68-4bf4-bdb3-b5cc91ab80c8}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

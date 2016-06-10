@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <tiny_obj_loader.h>
+#include <thread>
+#include <process.h>
 #include "fbxloader.h"
 #include <IL/il.h>
 #include <texture_loader.h>
@@ -123,7 +125,7 @@ struct MaterialParameters {
 GLint iLocModel, iLocView;
 GLint iLocMDiffuse, iLocMAmbient, iLocMSpecular, iLocMShininess;
 GLint iCameraPosition;
-Lighting *pointlight, *directionlight, *spotlight;
+Lighting *pointlight, *directionlight, *spotlight, *spotlight2, *spotlight3;
 
 /*Shadow*/
 GLuint uniforms_light_mvp, shadow_tex[3], shadow_matrix0, shadow_matrix1, shadow_matrix2, object_tex;
@@ -143,6 +145,7 @@ struct OBJ_SHADER {
 	GLuint buffer[3];
 	GLuint ele_buffer;
 	int indexSize;
+	vec3 CenterPosition;
 };
 vector<vector<OBJ_SHADER>> models;
 vector<GLuint*> texIndex;
@@ -175,8 +178,8 @@ GLuint skybox_vao;
 GLuint water_program;
 GLuint water_texture;
 GLuint water_vao;
-const int water_id = 3;
-const float waterHeight = 70;
+const int water_id =4;
+const float waterHeight = 10;
 
 GLuint refractionFb;
 GLuint refractionTexture;
@@ -194,11 +197,25 @@ float moveFactor = 0.0f;
 GLuint normalTexture;
 const string NOR_MAP = "normalMap.png";
 
+/* Bloom */
+int show_id = 0;
+const int fire_id = 24;
+GLuint bloomFb, bloomMaskFb;
+GLuint bloomDb, bloomMaskDb;
+GLuint bloomTexture, bloomMaskTexture;
+GLuint program_bloom;
+GLuint program_black;
+
+/* Scene */
+int FerrisWheel = 0;
+GLuint Wheel_Vao1, Wheel_Vao2;
+GLuint Wheel_elebuf1, Wheel_elebuf2;
+GLuint Wheel_buffer1[3], Wheel_buffer2[3];
+HANDLE guiThread;
+
 /* GUI */
-GLuint guitestFb;
 int createWindowFlag = 0;
 GLFWwindow* glfwwindow;
-int glfwcounter = 0;
 
 // frame buffer
 GLuint fb_vao;
@@ -449,7 +466,6 @@ void Init_FBO(){
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 
-
 	// set up frame buffer
 	reflectionFb = createFramebuffer();
 	reflectionDb = createDepthBuffer(image_size[0], image_size[1]);
@@ -461,11 +477,15 @@ void Init_FBO(){
 	refractionDb = createDepthTexture(image_size[0], image_size[1]);
 	unbindCurrentFrameBuffer();
 
-	guitestFb = createFramebuffer();
-	guitestFb = createDepthBuffer(image_size[0], image_size[1]);
-	guitestFb = createTextureAttachment(image_size[0], image_size[1]);
+	bloomFb = createFramebuffer();
+	bloomTexture = createTextureAttachment(image_size[0], image_size[1]);
+	bloomDb = createDepthTexture(image_size[0], image_size[1]);
 	unbindCurrentFrameBuffer();
 
+	bloomMaskFb = createFramebuffer();
+	bloomMaskTexture = createTextureAttachment(image_size[0], image_size[1]);
+	bloomMaskDb = createDepthTexture(image_size[0], image_size[1]);
+	unbindCurrentFrameBuffer();
 
 }
 
@@ -491,7 +511,47 @@ void createWaterProgram(){
 	dudvTexture = loadTexture(DUDV_MAP);
 	normalTexture = loadTexture(NOR_MAP);
 }
+void createBloomProgram(){
+	program_bloom = glCreateProgram();
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	char** vertexShaderSource = loadShaderSource("ShaderSource/bloom.vs.glsl");
+	char** fragmentShaderSource = loadShaderSource("ShaderSource/bloom.fs.glsl");
+	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
+	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
+	freeShaderSource(vertexShaderSource);
+	freeShaderSource(fragmentShaderSource);
+	glCompileShader(vertexShader);
+	glCompileShader(fragmentShader);
+	shaderLog(vertexShader);
+	shaderLog(fragmentShader);
+	glAttachShader(program_bloom, vertexShader);
+	glAttachShader(program_bloom, fragmentShader);
+	glLinkProgram(program_bloom);
+	glUseProgram(program_bloom);
 
+}
+
+void createBloomBlackProgram(){
+	program_black = glCreateProgram();
+	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	char** vertexShaderSource = loadShaderSource("ShaderSource/black.vs.glsl");
+	char** fragmentShaderSource = loadShaderSource("ShaderSource/black.fs.glsl");
+	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
+	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
+	freeShaderSource(vertexShaderSource);
+	freeShaderSource(fragmentShaderSource);
+	glCompileShader(vertexShader);
+	glCompileShader(fragmentShader);
+	shaderLog(vertexShader);
+	shaderLog(fragmentShader);
+	glAttachShader(program_black, vertexShader);
+	glAttachShader(program_black, fragmentShader);
+	glLinkProgram(program_black);
+	glUseProgram(program_black);
+
+}
 void My_Init()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -500,6 +560,8 @@ void My_Init()
 
 	/* framebuffer water shader */
 	createWaterProgram();
+	createBloomProgram();
+	createBloomBlackProgram();
 	Init_FBO();
 
 
@@ -575,6 +637,10 @@ void My_Init()
 	directionlight->LightingGetUniformLocation(program_RenderScene);
 	spotlight->LightingGetUniformLocation(program_RenderScene);
 	spotlight->SpotLightingGetUniformLocation(program_RenderScene);
+	spotlight2->LightingGetUniformLocation(program_RenderScene);
+	spotlight2->SpotLightingGetUniformLocation(program_RenderScene);
+	spotlight3->LightingGetUniformLocation(program_RenderScene);
+	spotlight3->SpotLightingGetUniformLocation(program_RenderScene);
 
 	iCameraPosition = glGetUniformLocation(program_RenderScene, "cameraPosition");
 	shadow_tex[0] = glGetUniformLocation(program_RenderScene, "shadow_tex0");
@@ -647,6 +713,39 @@ void My_Init()
 
 }
 
+void BindingVao(GLuint &vao, GLuint *buffer, GLuint &elementbuffer, vector<tinyobj::shape_t> &shape, int flat, int i){
+	glGenBuffers(1, &buffer[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[0]);
+	glBufferData(GL_ARRAY_BUFFER, shape[flat].mesh.positions.size()*sizeof(float), &shape[flat].mesh.positions[0], GL_STATIC_DRAW);
+
+	glGenBuffers(1, &buffer[1]);
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[1]);
+	glBufferData(GL_ARRAY_BUFFER, shape[i].mesh.texcoords.size()*sizeof(float), &shape[i].mesh.texcoords[0], GL_STATIC_DRAW);
+
+	glGenBuffers(1, &buffer[2]);
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[2]);
+	glBufferData(GL_ARRAY_BUFFER, shape[flat].mesh.normals.size()*sizeof(float), &shape[flat].mesh.normals[0], GL_STATIC_DRAW);
+
+	glGenBuffers(1, &elementbuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, shape[flat].mesh.indices.size()*sizeof(unsigned int), &shape[flat].mesh.indices[0], GL_STATIC_DRAW);
+	
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
+
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[0]);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[1]);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, buffer[2]);
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glEnableVertexAttribArray(2);
+}
+
 void My_LoadModels(char* filename, int flag)
 {
 	std::vector<tinyobj::shape_t> shapes;
@@ -674,8 +773,8 @@ void My_LoadModels(char* filename, int flag)
 		// For Each Material
 
 
-
-		printf("Downloading terrain...\n");
+		// Physical system
+		/*printf("Downloading terrain...\n");
 		for (int i = 0; i < shapes.size(); i++){
 
 			for (int j = 0; j < shapes[i].mesh.indices.size(); j++){
@@ -685,9 +784,7 @@ void My_LoadModels(char* filename, int flag)
 				float triz = shapes[i].mesh.positions[index * 3 + 2];
 				phyengine.InsertMap(trix, triy, triz);
 			}
-		}
-
-
+		}*/
 
 
 		for (int i = 0; i < materials.size(); i++)
@@ -699,11 +796,14 @@ void My_LoadModels(char* filename, int flag)
 			printf("i : %d\n", i);
 			cout << materials[i].diffuse_texname.c_str() << endl;
 			MaterialParameters submat;
-			for (int z = 0; z < 3; z++){
-				submat.ambient[z] = (materials[i].ambient[z] == 0) ? 1 : materials[i].ambient[z];
-				submat.diffuse[z] = (materials[i].diffuse[z] == 0) ? 0.5 : materials[i].diffuse[z];
-				submat.specular[z] = materials[i].specular[z];
-			}
+			
+			
+				for (int z = 0; z < 3; z++){
+					submat.ambient[z] = (materials[i].ambient[z] == 0) ? 1 : materials[i].ambient[z];
+					submat.diffuse[z] = (materials[i].diffuse[z] == 0) ? 0.5 : materials[i].diffuse[z];
+					submat.specular[z] = materials[i].specular[z];
+				}
+			
 			submat.ambient[3] = 1; submat.diffuse[3] = 1; submat.specular[3] = 1;
 			submat.shininess = (materials[i].shininess == 0) ? 1 : materials[i].shininess;
 			thieObjMat.push_back(submat);
@@ -740,7 +840,7 @@ void My_LoadModels(char* filename, int flag)
 		int baseVertex = 0;
 		shapeCount = shapes.size();
 
-		printf("count : %d, size : %d\n", count, shapes.size());
+		printf("materials.size : %d, shapes.size : %d\n", materials.size(), shapes.size());
 		// For Each Shape (or Mesh, Object)
 		for (int i = 0; i < shapes.size(); i++)
 		{
@@ -762,39 +862,46 @@ void My_LoadModels(char* filename, int flag)
 
 			obj.materialIterator.push_back(shapes[i].mesh.indices.size());
 
+			//if (i == 23 || i == 26){
+			//	float maxx, maxy, maxz, minx, miny, minz;
+			//	maxx = minx = shapes[i].mesh.positions[shapes[i].mesh.indices[0]];
+			//	maxy = miny = shapes[i].mesh.positions[shapes[i].mesh.indices[1]];
+			//	maxz = minz = shapes[i].mesh.positions[shapes[i].mesh.indices[2]];
+			//	for (unsigned int j = 3; j < shapes[i].mesh.indices.size(); j = j + 3){
+			//		unsigned int id1 = shapes[i].mesh.indices[j + 0];
+			//		unsigned int id2 = shapes[i].mesh.indices[j + 1];
+			//		unsigned int id3 = shapes[i].mesh.indices[j + 2];
+			//		float vx, vy, vz;
+			//		vx = shapes[i].mesh.positions[id1];
+			//		vy = shapes[i].mesh.positions[id2];
+			//		vz = shapes[i].mesh.positions[id3];
+			//		cout << vx << " " << vy << " " << vz << endl ;
+			//		if (vx > maxx) maxx = vx;  if (vx < minx) minx = vx;
+			//		if (vy > maxy) maxy = vy;  if (vy < miny) miny = vy;
+			//		if (vz > maxz) maxz = vz;  if (vz < minz) minz = vz;
+			//	}
+			//	//printf("max\n%f %f, %f %f, %f %f\n", maxx, minx, maxy, miny, maxz, minz);
+			//	obj.CenterPosition.x = (maxx + minx) / 2;
+			//	obj.CenterPosition.y = (maxy + miny) / 2;
+			//	obj.CenterPosition.z = (maxz + minz) / 2;
+			//	cout << obj.CenterPosition.x << " " << obj.CenterPosition.y << " " << obj.CenterPosition.z << endl;
+			//}
+			BindingVao(obj.vao, obj.buffer, obj.ele_buffer, shapes, i, i);
 
-			glGenBuffers(1, &obj.buffer[0]);
+			if (i == 23 || i == 26){
 
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[0]);
-			glBufferData(GL_ARRAY_BUFFER, shapes[i].mesh.positions.size()*sizeof(float), &shapes[i].mesh.positions[0], GL_STATIC_DRAW);
+				int flat = (i == 23) ? 26 : 23;
 
-			glGenBuffers(1, &obj.buffer[1]);
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[1]);
-			glBufferData(GL_ARRAY_BUFFER, shapes[i].mesh.texcoords.size()*sizeof(float), &shapes[i].mesh.texcoords[0], GL_STATIC_DRAW);
+				if (i == 23){
+					BindingVao(Wheel_Vao1, Wheel_buffer1, Wheel_elebuf1, shapes, flat, i);
+					
+				}
+				else{
+					BindingVao(Wheel_Vao2, Wheel_buffer2, Wheel_elebuf2, shapes, flat, i);
+					
+				}
 
-			glGenBuffers(1, &obj.buffer[2]);
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[2]);
-			glBufferData(GL_ARRAY_BUFFER, shapes[i].mesh.normals.size()*sizeof(float), &shapes[i].mesh.normals[0], GL_STATIC_DRAW);
-
-			glGenBuffers(1, &obj.ele_buffer);
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.ele_buffer);
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, shapes[i].mesh.indices.size()*sizeof(unsigned int), &shapes[i].mesh.indices[0], GL_STATIC_DRAW);
-
-			glGenVertexArrays(1, &obj.vao);
-			glBindVertexArray(obj.vao);
-
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[0]);
-			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-			glEnableVertexAttribArray(0);
-
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[1]);
-
-			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-			glEnableVertexAttribArray(1);
-
-			glBindBuffer(GL_ARRAY_BUFFER, obj.buffer[2]);
-			glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-			glEnableVertexAttribArray(2);
+			}
 
 			obj.indexSize = shapes[i].mesh.indices.size();
 			objects.push_back(obj);
@@ -835,10 +942,10 @@ void My_LoadModels(char* filename, int flag)
 
 
 
-
-	phyengine.GenMap();
+	//physical system
+	/*phyengine.GenMap();
 	phyengine.MakeDataFile();
-	phyengine.GenTerrain();
+	phyengine.GenTerrain();*/
 
 
 }
@@ -875,8 +982,8 @@ mat4 DrawShadow(int flag){
 	light_position = vec3(light_position.x, light_position.y, light_position.z);
 
 	// X¶b
-	mat4 light_proj_matrix = frustum(-1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 100.0f + flag * 500);
-	mat4 light_view_matrix = lookAt(light_position, vec3(10000.0f, light_position.y, light_position.z), vec3(0.0f, 1.0f, 0.0f));
+	mat4 light_proj_matrix = frustum(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 10000.0f + flag * 2000);
+	mat4 light_view_matrix = lookAt(light_position, vec3(light_position.x, light_position.y, 5000.0f), vec3(0.0f, 1.0f, 0.0f));
 
 	// Y ¶b
 	//mat4 light_proj_matrix = frustum(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 5000.0f + flag * 1000);
@@ -922,7 +1029,7 @@ mat4 DrawShadow(int flag){
 	//glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.6f, 0.6f, 1.0f, 1.0f);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glViewport(0, 0, image_size[0], image_size[1]);
 	//}
 
@@ -961,6 +1068,7 @@ void UpdateView()
 	CameraViewMatrix = rotate * t;
 	//mvp = CameraProjectionMatrix * CameraViewMatrix;
 }
+
 void Display_skybox(){
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_texture);
@@ -977,6 +1085,7 @@ void Display_skybox(){
 	glEnable(GL_DEPTH_TEST);
 
 }
+
 void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_id)
 {
 	vector<OBJ_SHADER> objects = models[id];
@@ -984,28 +1093,34 @@ void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_
 	vector<MaterialParameters> thisObjMat = LightingMaterials[id];
 	for (int i = 0; i < objects.size(); i++){
 		if (i != water_id){
+
 			mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
-			mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2]));
+			mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2])) ;
+
 			mymvp = mymvp * CameraViewMatrix * model_matrix;
 			//mvp = mvp * viewMatriid * translate(mat4(), vec3(0, 60, 0))* rotate(mat4(), radians(180.0f), vec3(0,0,1)) * rotate(mat4(), radians(90.0f), vec3(1,0,0));
 			glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
 			glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "M"), 1, GL_FALSE, value_ptr(model_matrix));
 			glUniform1i(glGetUniformLocation(program_RenderScene, "shape_id"), i);
 			glUniform4fv(glGetUniformLocation(program_RenderScene, "plane"), 1, plane);
-
-			glBindVertexArray(objects[i].vao);
-
-			/*for (int j = 0; j < models[id].crews[i].indexGroups.size(); j++){
-				GLint matid = models[id].crews[i].indexGroups[j].matid;
-
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, models[id].crews[i].indexGroups[j].ibo);
-				glUniform1i(glGetUniformLocation(program, "tex"), 0);
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, models[id].texObjs[matid]);
-				glDrawElements(GL_TRIANGLES, models[id].crews[i].indexGroups[j].numIndices, GL_UNSIGNED_INT, 0);
-			}*/
+			
+			int flag = 0;
+			if (FerrisWheel == 0){
+				if (i == 23){
+					glBindVertexArray(Wheel_Vao1);
+					flag = 1;
+				}
+				else if (i == 26){
+					glBindVertexArray(Wheel_Vao2);
+					flag = 1;
+				}
+				else
+					glBindVertexArray(objects[i].vao);
+			}else
+				glBindVertexArray(objects[i].vao);
 
 			for (int k = objects[i].materialID.size() - 1; k >= 0; k--){
+
 				int matID = objects[i].materialID[k];
 				//glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect_draw_buffer);
 				glUniform1i(glGetUniformLocation(program_RenderScene, "object_tex"), 3);
@@ -1018,14 +1133,60 @@ void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_
 				glUniform4fv(iLocMSpecular, 1, thisObjMat[matID].specular);
 				glUniform1f(iLocMShininess, thisObjMat[matID].shininess);
 
+				if (flag == 1){
+					if (i == 23){
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Wheel_elebuf1);
+						glDrawElements(GL_TRIANGLES, (objects[26].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[26].materialIterator[k] * sizeof(float)));
+					}
+					else{
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Wheel_elebuf2);
+						glDrawElements(GL_TRIANGLES, (objects[23].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[23].materialIterator[k] * sizeof(float)));
+					}
+				}
+				else{
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects[i].ele_buffer);
+					glDrawElements(GL_TRIANGLES, (objects[i].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[i].materialIterator[k] * sizeof(float)));
+
+				}
+				//glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, NUM_DRAWS, 0);
+			}
+		}
+
+	}
+
+}
+void Display_bloom(int id, vec3 pos, float* scale_bias){
+	vector<OBJ_SHADER> objects = models[id];
+	GLuint* subtextureINDEX = texIndex[id];
+	vector<MaterialParameters> thisObjMat = LightingMaterials[id];
+	
+	//int i = fire_id;
+	
+	for (int i = 0; i < objects.size(); i++){
+		if (i != water_id){
+			
+			mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
+			mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2]));
+			mymvp = mymvp * CameraViewMatrix * model_matrix;
+			//mvp = mvp * viewMatriid * translate(mat4(), vec3(0, 60, 0))* rotate(mat4(), radians(180.0f), vec3(0,0,1)) * rotate(mat4(), radians(90.0f), vec3(1,0,0));
+			glUniformMatrix4fv(glGetUniformLocation(program_bloom, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
+			glUniform1i(glGetUniformLocation(program_bloom, "shape_id"), i);
+
+			glBindVertexArray(objects[i].vao);
+
+			for (int k = objects[i].materialID.size() - 1; k >= 0; k--){
+				int matID = objects[i].materialID[k];
+				//glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect_draw_buffer);
+
+				glBindTexture(GL_TEXTURE_2D, subtextureINDEX[matID]);
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects[i].ele_buffer);
 
 				glDrawElements(GL_TRIANGLES, (objects[i].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[i].materialIterator[k] * sizeof(float)));
 				//glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, NUM_DRAWS, 0);
 			}
 		}
-
 	}
+	
 
 }
 
@@ -1059,21 +1220,6 @@ void Display_water(int id, int j, vec3 pos, float* scale_bias, float* plane, GLu
 	glUniform1f(glGetUniformLocation(program_RenderScene, "moveFactor"), moveFactor);
 	glUniform3fv(glGetUniformLocation(program_RenderScene, "cameraPosition"), 1, value_ptr(cameraEyes));
 	glBindVertexArray(objects[water_id].vao);
-
-	/*for (int j = 0; j < models[id].crews[i].indexGroups.size(); j++){
-		GLint matid = models[id].crews[i].indexGroups[j].matid;
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, models[id].crews[i].indexGroups[j].ibo);
-
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, reflectionTexture);
-		glActiveTexture(GL_TEXTURE2);
-		glBindTexture(GL_TEXTURE_2D, refractionTexture);
-		glActiveTexture(GL_TEXTURE3);
-		glBindTexture(GL_TEXTURE_2D, dudvTexture);
-		glDrawElements(GL_TRIANGLES, models[id].crews[i].indexGroups[j].numIndices, GL_UNSIGNED_INT, 0);
-	}*/
-
 	
 	for (int k = objects[j].materialID.size() - 1; k >= 0; k--){
 		int matID = objects[j].materialID[k];
@@ -1109,16 +1255,15 @@ static void error_callback(int error, const char* description)
 	fprintf(stderr, "Error %d: %s\n", error, description);
 }
 
-void Display_GUI(){
+void Display_GUI(void *p){
 
-	/*bindFrameBuffer(guitestFb, image_size[0], image_size[1]);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);*/
 
 	if (createWindowFlag != 1){
 
 		glfwSetErrorCallback(error_callback);
 		glfwInit();
-		glfwwindow = glfwCreateWindow(400, 400, "ImGui OpenGL2 example", NULL, NULL);
+		glfwwindow = glfwCreateWindow(400, 400, "User interface", NULL, NULL);
+		glfwSetWindowPos(glfwwindow, 0, 100);
 		glfwMakeContextCurrent(glfwwindow);
 		// Setup ImGui binding
 		ImGui_ImplGlfw_Init(glfwwindow, true);
@@ -1126,19 +1271,24 @@ void Display_GUI(){
 		 
 	}
 
-	if (!glfwWindowShouldClose(glfwwindow) && timer_cnt%10 == 0){
+	while (!glfwWindowShouldClose(glfwwindow)){
 		glfwPollEvents();
 		ImGui_ImplGlfw_NewFrame();
 		const char* test = "test";
 		bool* p_open = NULL;
 		ImVec4 clear_color = ImColor(114, 144, 154);
-		ImGui::Begin(test, p_open, ImVec2(0, 0), -1.0f, 0);
+		ImGui::Begin(test, p_open, ImVec2(400, 400), -1.0f, 0);
 		{
 			ImGui::SetWindowPos(ImVec2(0, 0));
 			static float f = 0.0f;
-			ImGui::Text("Hello, world!");
+			ImGui::Text("Hello, this is a teapot story. :) \nWelcome to our world!");
 			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
 			ImGui::ColorEdit3("clear color", (float*)&clear_color);
+
+			if (ImGui::Button("Water color effect")) showSelect = 11;
+			if (ImGui::Button("Ride the roller coaster"));
+			if (ImGui::Button("Ride the Ferris wheel"));
+
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 		}
 		ImGui::End();
@@ -1150,14 +1300,13 @@ void Display_GUI(){
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui::Render();
 		glfwSwapBuffers(glfwwindow);
+		SuspendThread(guiThread);
 	}
 	
+	// Cleanup
+	ImGui_ImplGlfw_Shutdown();
+	glfwTerminate();
 
-	/*unbindCurrentFrameBuffer();
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-*/
 }
 
 // GLUT callback. Called to draw the scene.
@@ -1179,6 +1328,28 @@ void My_Display()
 	mat4 shadow_sbpv_matrix1 = DrawShadow(1);
 	mat4 shadow_sbpv_matrix2 = DrawShadow(2);
 
+	// Bloom Effect
+	bindFrameBuffer(bloomFb, image_size[0], image_size[1]);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	
+	glUseProgram(program_bloom);
+	Display_bloom(0, vec3(0), value_ptr(bais));
+
+	unbindCurrentFrameBuffer();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+	bindFrameBuffer(bloomMaskFb, image_size[0], image_size[1]);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glUseProgram(program_black);
+	glBindVertexArray(fb_vao);
+	glBindTexture(GL_TEXTURE_2D, bloomTexture);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	unbindCurrentFrameBuffer();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// Water Effect
 	// reflection framebuffer
@@ -1215,8 +1386,7 @@ void My_Display()
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 	/* Display Gui */
-	// Display_GUI();
-	
+    // Display_GUI();
 
 	// Clear part
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, FBO);
@@ -1236,6 +1406,10 @@ void My_Display()
 	directionlight->LightingUniformGiven();
 	spotlight->LightingUniformGiven();
 	spotlight->SpotLightingUniformGiven();
+	spotlight2->LightingUniformGiven();
+	spotlight2->SpotLightingUniformGiven();
+	spotlight3->LightingUniformGiven();
+	spotlight3->SpotLightingUniformGiven();
 
 	float camera[3] = { cameraEyes.x, cameraEyes.y, cameraEyes.z };
 	glUniform3fv(iCameraPosition, 1, camera);
@@ -1298,7 +1472,7 @@ void My_Display()
 	Display_water(0, 3, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), reflectionTexture, refractionTexture);
 
 	/*glActiveTexture(GL_TEXTURE0);
-	Display_texture(guitestFb, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
+	Display_texture(bloomMaskTexture, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
 	Display_texture(refractionTexture, fb_vao, program2, vec2(0.5, 0.5), vec2(0.25, 0.25));*/
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
@@ -1309,7 +1483,9 @@ void My_Display()
 	glBindVertexArray(window_vao);
 
 	glUniform1i(texLoc0, 0);
-	glUniform1i(texLoc1, 1);
+	glUniform1i(texLoc1, 1); 
+	glUniform1i(glGetUniformLocation(program_FrameBuffer, "bloom_mask"), 2);
+	
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, FBODataTexture);
 	glActiveTexture(GL_TEXTURE1);
@@ -1317,6 +1493,9 @@ void My_Display()
 		glBindTexture(GL_TEXTURE_2D, NoiseTexture0);
 	else
 		glBindTexture(GL_TEXTURE_2D, NoiseTexture1);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, bloomMaskTexture);
 
 	glUniform1i(Shader_now_Loc, showSelect);
 	glUniform1i(Shader_magflag, magflag);
@@ -1331,7 +1510,9 @@ void My_Display()
 	if (finish_without_update)
 		glFinish();
 	else
-		glutSwapBuffers();
+		glutSwapBuffers(); 
+
+	ResumeThread(guiThread);
 }
 
 
@@ -1366,6 +1547,8 @@ void My_Reshape(int width, int height)
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, FBO);
 	glFramebufferRenderbuffer(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRBO);
 	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, FBODataTexture, 0);
+
+	Init_FBO();
 }
 
 void My_Timer(int val)
@@ -1373,7 +1556,10 @@ void My_Timer(int val)
 	moveFactor += WAVE_SPEED * timer_speed / 1000;
 	moveFactor = mod(moveFactor, 1.0f);
 	timer_cnt++;
-	if (timer_cnt > 120) timer_cnt = 0;
+	if (timer_cnt > 119) timer_cnt = 0;
+	if (timer_cnt % 20 == 0){
+		FerrisWheel = (FerrisWheel == 0) ? 1 : 0;
+	}
 	glutPostRedisplay();
 	if (timer_enabled)
 	{
@@ -1562,7 +1748,7 @@ void My_Keyboard(unsigned char key, int x, int y)
 	float dy = 0;
 	switch (key) {
 
-	case 'w':
+	/*case 'w':
 		walking = true;
 		moving_state = FORWARD;
 		break;
@@ -1586,7 +1772,39 @@ void My_Keyboard(unsigned char key, int x, int y)
 			flying = false;
 		else
 			flying = true;
-		break;
+		break;*/
+	case 'w':
+	{
+				dz = 2;
+				break;
+	}
+
+	case 's':
+	{
+				dz = -2;
+				break;
+	}
+	case 'a':
+	{
+				dx = -2;
+				break;
+	}
+
+	case 'd':
+	{
+				dx = 2;
+				break;
+	}
+	case 'z':
+	{
+				dy = 2;
+				break;
+	}
+	case 'x':
+	{
+				dy = -2;
+				break;
+	}
 	/*case 'r':
 		camera.Restart();
 		rollerFirstStart = true;
@@ -1660,7 +1878,7 @@ void My_Keyboard(unsigned char key, int x, int y)
 	cout << light_position.x << " " << light_position.y << " " << light_position.z << endl;
 
 	//get current view matrix
-	/*mat4 mat = CameraViewMatrix;
+	mat4 mat = CameraViewMatrix;
 	//row major
 	vec3 forward(mat[0][2], mat[1][2], mat[2][2]);
 	vec3 side(mat[0][0], mat[1][0], mat[2][0]);
@@ -1672,7 +1890,7 @@ void My_Keyboard(unsigned char key, int x, int y)
 	cameraEyes += (-dz * forward + dx * side + dy * up) * speed;
 	printf("eyeX: %lf, eyeY: %lf, eyeZ: %lf\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
 	//update the view matrix
-	UpdateView();*/
+	UpdateView();
 }
 
 void My_SpecialKeys(int key, int x, int y)
@@ -1684,17 +1902,18 @@ void My_SpecialKeys(int key, int x, int y)
 	case GLUT_KEY_PAGE_UP:
 		break;
 	case GLUT_KEY_LEFT:
-		selectModel--;
-		if (selectModel < 1) selectModel = 3;
+		show_id++;
+		if (show_id > 45) show_id = 0;
 		break;
 	case GLUT_KEY_RIGHT:
-		selectModel++;
-		if (selectModel > 3) selectModel = 1;
-		
+		show_id--;
+		if (show_id < 0) show_id = 45;
 		break;
 	default:
 		break;
 	}
+	cout << "show_id : " << show_id << endl;
+	/// fire id = 24
 }
 
 void My_Menu(int id)
@@ -1817,17 +2036,18 @@ void setLightingSource(){
 	vec4 diffuse = { 0.03f, 0.03f, 0.03f, 1 };
 	vec4 specular = { 0.5, 0.5, 0.5, 1 };
 	//vec4 position = { -300.0f, 2202.0f, -44.0f, 1 };
-	vec4 position = { 44.0f, 350.0f, 179.0f, 1 };
+	vec4 position = { 84.0f, 694.0f, -62.0f, 1 };
 	pointlight = new Lighting(0, 1);
 	pointlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 
-	ambient = { 0.08f, 0.08f, 0.08f, 1 };
+	ambient = { 0.5f, 0.5f, 0.5f, 1 };
 	diffuse = { 0.01f, 0.01f, 0.01f, 1 };
 	specular = { 1, 1, 1, 1 };
 	//position = { -900.0f, 404.0f, -44.0f, 0 };
 	//position = { 420.0f, 5344.0f, -44.0f, 0 };
-	//position = { 9.77f, 406.2f, -95.8f, 1 };
-	position = { -410.20f, 206.2f, 4.2f, 1 };
+	//position = { 9.77f, 406.2f, -95.8f, 0 };
+	//position = { -943.0f, 694.0f, -18.0f, 0 };
+	position = { -490.0f, 694.0f, -651.0f, 0 };
 	directionlight = new Lighting(1, 1);
 	directionlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 
@@ -1835,11 +2055,20 @@ void setLightingSource(){
 	diffuse = { 1.0f, 1.0f, 1.0f, 1 };
 	specular = { 1, 1, 1, 1 };
 	//position = { -410.2f, 206.2f, 4.2f, 1 };
-	position = { 44.0f, 270.0f, 179.0f, 1 };
-	spotlight = new Lighting(2, 0);
+	position = { 245.624f, 95.0f, 6.0f, 1 };
+	spotlight = new Lighting(2, 1);
 	spotlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
-	spotlight->SetSpotLight(vec3(410.2f, -206.2f, -4.2f), 900.0f, 12.5f);
+	spotlight->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
 
+	position = { 260.624f, 95.0f, 6.0f, 1 };
+	spotlight2 = new Lighting(3, 1);
+	spotlight2->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
+	spotlight2->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
+
+	position = { 230.624f, 95.0f, 6.0f, 1 };
+	spotlight3 = new Lighting(4, 1);
+	spotlight3->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
+	spotlight3->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
 }
 void initParas(){
 	cameraEyes =  { -40.0f, 76.0f, 71.2f };
@@ -1853,12 +2082,13 @@ void initParas(){
 }
 int main(int argc, char *argv[])
 {
+
 	// Initialize GLUT and GLEW, then create a window.
 	////////////////////
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
 
-	glutInitWindowPosition(100, 100);
+	glutInitWindowPosition(200, 100);
 	glutInitWindowSize(1200, 720);
 	glutCreateWindow("Assignment 03 102062222"); // You cannot use OpenGL functions before this line; The OpenGL context must be created first by glutCreateWindow()!
 	
@@ -1869,7 +2099,7 @@ int main(int argc, char *argv[])
 	dumpInfo();
 	initParas();
 	My_Init();
-	My_LoadModels("water.obj", 1);
+	My_LoadModels("final.obj", 1);
 	//My_LoadModels("Volleyball.FBX",2);
 	//My_LoadModels("Island/island.fbx", 2 );
 	//My_LoadModels("zombie_fury.FBX", 2);
@@ -1931,10 +2161,14 @@ int main(int argc, char *argv[])
 	glutTimerFunc(timer_speed, My_Timer, 0);
 
 
-	glutKeyboardUpFunc(KeyUp);
-	glutTimerFunc(phy_timer_speed, Phy_timer, 0);
+	//glutKeyboardUpFunc(KeyUp);
+	//glutTimerFunc(phy_timer_speed, Phy_timer, 0);
 	///////////////////////////////
 
+
+	/*thread nthread(Display_GUI);
+	nthread.join();*/
+	guiThread = (HANDLE)_beginthread(Display_GUI, 0, NULL);
 
 	// Enter main event loop.
 	//////////////

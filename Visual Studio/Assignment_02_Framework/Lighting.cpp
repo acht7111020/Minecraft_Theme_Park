@@ -29,8 +29,7 @@ Lighting::LightingGetUniformLocation(GLuint p){
 	string ambientStr = title + "].ambient";
 	string specularStr = title + "].specular";
 	string positionStr = title + "].position";
-
-	string openStr = "open[" + lightnumStr + "]";
+	string openStr = title + "].open";
 
 	uniformDiffuse = glGetUniformLocation(p, diffuseStr.c_str());
 	uniformAmbient = glGetUniformLocation(p, ambientStr.c_str());

@@ -106,6 +106,10 @@
     <ClInclude Include="Phyengine.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="ShaderSource\black.fs.glsl" />
+    <None Include="ShaderSource\black.vs.glsl" />
+    <None Include="ShaderSource\bloom.fs.glsl" />
+    <None Include="ShaderSource\bloom.vs.glsl" />
     <None Include="ShaderSource\depth.fs.glsl" />
     <None Include="ShaderSource\depth.vs.glsl" />
     <None Include="ShaderSource\fragment.fs.glsl" />
