@@ -10,5 +10,6 @@ out VS_OUT
 void main(void)
 {
     gl_Position = model_matrix * vec4(position,1.0,1.0);
+	
     vs_out.texcoord = texcoord;
 }

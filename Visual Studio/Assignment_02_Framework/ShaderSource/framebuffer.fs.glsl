@@ -1,6 +1,7 @@
 #version 420
 layout (binding = 0) uniform sampler2D tex; 
-layout (binding = 1) uniform sampler2D noise_map;
+layout (binding = 1) uniform sampler2D noise_map; 
+layout (binding = 2) uniform sampler2D bloom_mask;
 uniform int shader_now ;
 uniform int magflag;
 uniform int comflag;
@@ -434,6 +435,23 @@ vec4 blurred(int half_size){
 
 }
 
+vec4 blurred_fire(int half_size){
+	vec4 tmpcolor = vec4(0);	
+	int n = 0;
+	//int half_size = 5;
+	for ( int i = -half_size; i <= half_size; ++i ) {      
+		for ( int j = -half_size; j <= half_size; ++j ) {
+				vec4 c = texture(bloom_mask, fs_in.texcoord + vec2(i,j)/img_size); 
+				tmpcolor+= c;
+				n++;
+			}
+		}
+	tmpcolor /= n;
+	
+	return tmpcolor;
+
+}
+
 void main(void)
 {
 	float x_dist = fs_in.texcoord.x - mouse_pos.x;
@@ -534,6 +552,7 @@ void main(void)
 			case(1):
 				{
 					color = quantization();
+					//color = texture(tex, fs_in.texcoord) +texture(bloom_mask, fs_in.texcoord) + blurred_fire(5)*0.8 + blurred_fire(5)*0.8;
 					break;
 				}
 			case(0):
@@ -551,5 +570,7 @@ void main(void)
 		color = texture(tex, fs_in.texcoord);
 	}
 	else
-		color = vec4(0.597, 1, 1, 1); 
+		color = vec4(0.597, 1, 1, 1) ; 
+	color += texture(bloom_mask, fs_in.texcoord) + blurred_fire(5)*0.8 + blurred_fire(5)*0.8;
+	//color += blurred_fire(2)*0.8 + blurred_fire(3)*0.8;
 }

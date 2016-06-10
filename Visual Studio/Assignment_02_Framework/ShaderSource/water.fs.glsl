@@ -14,5 +14,5 @@ void main(){
 //    vec4 refractColor = texture(refractionTexture, fs_in.texcoord);
 //    color = mix(reflectColor, refractColor, 0.5);
     color = texture(tex, fs_in.texcoord);
-    color = mix(color, vec4(0.0, 0.3, 0.5, 1.0), 0.5);
+   // color = mix(color, vec4(0.0, 0.3, 0.5, 1.0), 0.5);
 }

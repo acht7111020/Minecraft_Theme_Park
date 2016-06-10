@@ -22,6 +22,7 @@ layout (binding = 4) uniform sampler2D reflectionTexture;
 layout (binding = 5) uniform sampler2D refractionTexture;
 layout (binding = 6) uniform sampler2D dudvMap;
 layout (binding = 7) uniform sampler2D normalMap;
+
 uniform float moveFactor;
 uniform int shape_id;
 uniform int changemode;
@@ -40,6 +41,7 @@ struct LightSourceParameters {
 	float spotExponent;
 	float spotCutoff; // (range: [0.0,90.0], 180.0)
 	float spotCosCutoff; // (range: [1.0,0.0],-1.0)
+	int open;
 };
 
 struct MaterialParameters {
@@ -50,8 +52,7 @@ struct MaterialParameters {
 };
 
 uniform MaterialParameters Material;
-uniform LightSourceParameters LightSource[3];
-uniform int open[3];
+uniform LightSourceParameters LightSource[5];
 uniform mat4 V;
 uniform mat4 M;
 uniform vec3 cameraPosition;
@@ -115,7 +116,7 @@ vec3 ApplyLighting(LightSourceParameters light, vec3 surfacePos, vec3 N, vec3 su
 
 	// calculate Spotlight effect Term:
 	
-	if(spotlight == 2){
+	if(spotlight == 2 || spotlight == 3 || spotlight == 4){
 		vec3 D = -normalize( vec3( tranViewMatrix * light.spotDirection ) ) ;
 		//if( dot(D, surfaceToLight) > 0.9999)
 		//	Seff = 1;
@@ -152,16 +153,16 @@ float CalcShadowFactor(int CascadeIndex)
 	if( CascadeIndex== 0){
 		z = 0.5 * shadow_coord0.z + 0.5; 
 		Depth = textureProj( shadow_tex0, shadow_coord0); 
-		factor = 0.4;
+		//factor = 0.4;
 	}
 	else if(CascadeIndex == 1){
 		z = 0.5 * shadow_coord1.z + 0.5; 
 		Depth = textureProj( shadow_tex1, shadow_coord1); 
-		factor = 0.6;
+		//factor = 0.6;
 	}else{
 		z = 0.5 * shadow_coord2.z + 0.5; 
 		Depth = textureProj( shadow_tex2, shadow_coord2); 
-		factor = 0.8;
+		//factor = 0.8;
 	}
     if (Depth < 0.6 + 0.00001) 
         return 0.6;
@@ -176,7 +177,7 @@ float shaodowMulti(){
 	sum *= visibility;*/
 
 	float ShadowFactor = 0.1;
-	float gCascadeEndClipSpace[3] = {100, 500, 800};
+	float gCascadeEndClipSpace[3] = {800, 1600, 2500};
     for (int i = 0 ; i < 3 ; i++) {
         if (ClipSpacePosZ <= gCascadeEndClipSpace[i]) {
             ShadowFactor = CalcShadowFactor(i);
@@ -217,6 +218,18 @@ float rand(vec2 n)
      fract(sin(dot(n.xy, vec2(12.9898, 78.233)))* 43758.5453);
 }
 
+float FogColor(){
+	
+	float fogFactor = 0;
+	float fogDensity = 0.08;
+
+	float dist = length(vec4(surfacePos, 1));
+	if(dist < 100) return 1;
+	fogFactor = 2.0/pow(exp(dist * fogDensity),0.05);
+	fogFactor = clamp(fogFactor, 0, 1);
+	return fogFactor;
+}
+
 void main()
 {
 	/* Light formula */
@@ -226,8 +239,8 @@ void main()
 
 	int i = 0;
 	vec3 lightColor = vec3(0);
-	for(i = 0 ; i < 3 ; i++){
-		if(open[i] == 1) lightColor += ApplyLighting(LightSource[i], surfacePos, normalize(normal), surfaceToCamera , i);
+	for(i = 0 ; i < 5 ; i++){
+		if(LightSource[i].open == 1) lightColor += ApplyLighting(LightSource[i], surfacePos, normalize(normal), surfaceToCamera , i);
 	}
 
 	if(changemode == 0){
@@ -240,7 +253,7 @@ void main()
 		//if(texColor.a < 0.5)
 		//	discard;
 		
-		if(shape_id == 3){
+		if(shape_id == 4){
 			vec2 coord = vec2(vv3pos.x/2.0 + 0.5, vv3pos.z/2.0 + 0.5) * tiling;
 			distortedTexCoords = texture(dudvMap, vec2(coord.x + moveFactor, coord.y)).rg*0.1;
 			distortedTexCoords = coord + vec2(distortedTexCoords.x, distortedTexCoords.y+moveFactor);
@@ -266,6 +279,9 @@ void main()
 		}
 		else{
 			
+			if(shape_id == 24){
+				lightColor += vec3(0.25,0,0);
+			}
 			if(color.a < 0.5)
 				discard;
 			float visibility = shaodowMulti();
@@ -280,4 +296,8 @@ void main()
 	}
 	else
 		fragColor = vec4(vv3color, 1) ;
+
+	vec4 fogColor = vec4(0.5, 0.5, 0.5, 1.0);
+	float fogFactor = FogColor();
+	fragColor = mix(fogColor, fragColor, fogFactor);
 }
