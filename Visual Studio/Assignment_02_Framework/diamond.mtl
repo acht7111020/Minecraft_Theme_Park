@@ -1,0 +1,15 @@
+Wavefront OBJ material file
+# Contains 1 materials
+
+newmtl Sea_Lantern
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+Ke 1 1 1
+# map_Ka diamond-RGB.png
+map_Kd diamond-RGB.png
+map_Ke diamond-RGB.png
+# illum 2
+# d 1
+# Tr 1

@@ -465,6 +465,11 @@ void main(void)
 	if(fs_in.texcoord.x < (CompareBarX - 0.003) || comflag == 0){
 		switch(shader_now)
 		{
+			case(17):
+				{
+					color = Toon();
+					break;
+				}
 			case(16):
 				{
 					vec4 mycolor = Watercolor();

@@ -46,10 +46,13 @@ public:
 	void LightingUniformGiven();
 	void SpotLightingUniformGiven();
 	void ChangeOpenStatus();
+	void ChangeOpenStatus(int i);
 	void SetLight(float* ambient, float* diffuse, float* specular, float* position);
 	void SetSpotLight(vec3 SpotDir, float SpotExp, float SpotCut);
 	vec3 GetLightPosition();
 	void SetLightPosition(vec3 pos);
+	void SetLightAmbient(vec3 a);
+	vec3 getLightAmbient();
 private:
 	int lightnum;
 	int lightopen;

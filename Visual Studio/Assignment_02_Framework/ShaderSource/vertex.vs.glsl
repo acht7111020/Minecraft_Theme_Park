@@ -8,18 +8,17 @@ uniform mat4 um4mvp;
 uniform mat4 V;
 uniform mat4 M;
 uniform int changemode;
-uniform mat4 shadow_matrix0;
-uniform mat4 shadow_matrix1;
-uniform mat4 shadow_matrix2;
+
 uniform vec3 cameraPosition;
 uniform vec4 plane;
-
+uniform mat4 shadow_matrix[3];
 out vec3 vv3color;
 out vec3 surfacePos;
 out vec3 normal;
 out vec4 shadow_coord0;
 out vec4 shadow_coord1;
 out vec4 shadow_coord2;
+out vec4 oriVertex;
 out float ClipSpacePosZ;
 
 //water
@@ -35,9 +34,10 @@ void main()
 	surfacePos = vec3(V * M * vec4(iv3vertex, 1)); //surfacePosition 
 	normal = vec3( transpose(inverse(V*M)) * vec4(iv3normal, 1.0 ) );
 	tranViewMatrix = transpose(inverse(V));
-	shadow_coord0 = shadow_matrix0 * vec4(iv3vertex,1);
-	shadow_coord1 = shadow_matrix1 * vec4(iv3vertex,1);
-	shadow_coord2 = shadow_matrix2 * vec4(iv3vertex,1);
+	oriVertex = vec4(iv3vertex, 1);
+	shadow_coord0 = shadow_matrix[0] * vec4(iv3vertex,1);
+	shadow_coord1 = shadow_matrix[1] * vec4(iv3vertex,1);
+	shadow_coord2 = shadow_matrix[2] * vec4(iv3vertex,1);
 	clipSpace = um4mvp * vec4(iv3vertex, 1.0);
 	gl_Position = clipSpace;
 	if(changemode == 0)

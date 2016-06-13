@@ -3,8 +3,7 @@ in vec2 vv2cor;
 out vec4 fragColor;
 uniform sampler2D tex;
 uniform int shape_id;
-
-int fire_id = 24;
+uniform int fire_id;
 void main()
 {
 	if(shape_id == fire_id)

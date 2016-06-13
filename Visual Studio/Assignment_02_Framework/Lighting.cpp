@@ -109,3 +109,19 @@ Lighting::SetLightPosition(vec3 pos){
 	lightsource.position.y += pos.y;
 	lightsource.position.z += pos.z;
 }
+
+void 
+Lighting::SetLightAmbient(vec3 a){
+	lightsource.ambient = vec4(a, lightsource.ambient.w);
+}	
+
+vec3
+Lighting::getLightAmbient(){
+	return vec3(lightsource.ambient);
+
+}
+
+void 
+Lighting::ChangeOpenStatus(int i){
+	lightopen = i;
+}

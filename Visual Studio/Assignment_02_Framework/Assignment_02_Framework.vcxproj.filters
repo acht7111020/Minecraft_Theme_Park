@@ -18,6 +18,7 @@
     <ClCompile Include="GUI\imgui_impl_glfw.cpp">
       <Filter>GUI</Filter>
     </ClCompile>
+    <ClCompile Include="Camera.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fbxloader.h" />
@@ -44,6 +45,7 @@
     <ClInclude Include="GUI\imgui_impl_glfw.h">
       <Filter>GUI</Filter>
     </ClInclude>
+    <ClInclude Include="Camera.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ShaderSource\black.fs.glsl">
@@ -86,6 +88,12 @@
       <Filter>Shader</Filter>
     </None>
     <None Include="ShaderSource\water.vs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\map.fs.glsl">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="ShaderSource\map.vs.glsl">
       <Filter>Shader</Filter>
     </None>
   </ItemGroup>

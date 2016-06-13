@@ -1,0 +1,324 @@
+Wavefront OBJ material file
+# Contains 28 materials
+
+newmtl Stone
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Grass_Block
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Dirt
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Oak_Wood_Planks
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Stationary_Water
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 4
+# d 0.535
+# Tr 0.535
+# Tf 0.465 0.465 0.465
+
+newmtl Stationary_Lava
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+Ke 1 1 1
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+map_Ke second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Sand
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Gravel
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Iron_Ore
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Coal_Ore
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Wood
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Oak_Leaves
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Sandstone
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Grass
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Wool
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Dandelion
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Poppy
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Brown_Mushroom
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Block_of_Gold
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Clay
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Sugar_Cane
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Glowstone
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+Ke 1 1 1
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+map_Ke second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Lily_Pad
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Spruce_Wood_Stairs
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Block_of_Quartz
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Stained_Clay
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Sunflower
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGBA.png
+map_Kd second_world-RGBA.png
+map_d second_world-Alpha.png
+# illum 2
+# d 1
+# Tr 1
+
+newmtl Spruce_Fence
+# Ns 0
+# Ka 0.2 0.2 0.2
+Kd 1 1 1
+Ks 0 0 0
+# map_Ka second_world-RGB.png
+map_Kd second_world-RGB.png
+# illum 2
+# d 1
+# Tr 1

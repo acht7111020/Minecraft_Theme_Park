@@ -13,6 +13,7 @@
 #include <texture_loader.h>
 #include "Lighting.h"
 #include "Phyengine.h"
+#include "Camera.h"
 
 #include "GUI/imgui.h"
 #include "GUI/imgui_impl_glfw.h"
@@ -55,7 +56,8 @@ Frost Glass : http://www.geeks3d.com/20101228/shader-library-frosted-glass-post-
 #define Shader_CompareONOFF 20
 #define Shader_Oilpainting 21
 #define Shader_Ink 22
-
+#define Shader_Toon 23
+#define myMax(a,b) (((a)>(b))?(a):(b))
 #define NUM_DRAWS 1
 
 #define NOTMOVING 0
@@ -67,7 +69,6 @@ Frost Glass : http://www.geeks3d.com/20101228/shader-library-frosted-glass-post-
 #define DOWNWARD 6
 int moving_state = NOTMOVING;
 
-Phyengine phyengine;
 
 static const GLfloat window_positions[] =
 {
@@ -79,7 +80,7 @@ static const GLfloat window_positions[] =
 
 float roll_z = 0; // z
 float pitch_x = 0; // x
-float yaw_y = 270.0f; // y
+float yaw_y = 90.0f; // y
 
 GLuint          program_ShadowDepth;
 GLuint          program_RenderScene;
@@ -105,11 +106,12 @@ struct MouseButton{
 	GLfloat end[2];
 	int flag = 0;
 } mouseLeft, mouseCompare;
-int timer_cnt = 0;
+int timer_cnt = 0, rollerplayer_cnt = 0;
 bool timer_enabled = true;
 unsigned int timer_speed = 16;
-int selectModel = 1, changing = 0; vec3 rotate_vector;
+int changing = 0; vec3 rotate_vector;
 vec3 cameraEyes, cameraCenter, upVector;
+vec3 girlEyes, girlVector;
 mat4 mvp;
 GLint um4mvp, changeMode;
 mat4 CameraProjectionMatrix, CameraViewMatrix;
@@ -173,13 +175,18 @@ GLuint skybox_program;
 GLuint skybox_texture;
 vector<string> faces;
 GLuint skybox_vao;
+GLuint night_texture;
+float timeFactor = 0.0f;
+const float TIME_SPEED = 0.09f;
+bool timeFlag = true;
+bool DayNightOnOff = true;
 
 /* water */
 GLuint water_program;
 GLuint water_texture;
 GLuint water_vao;
-const int water_id =4;
-const float waterHeight = 10;
+int water_id =5;
+float waterHeight = 49;
 
 GLuint refractionFb;
 GLuint refractionTexture;
@@ -199,7 +206,7 @@ const string NOR_MAP = "normalMap.png";
 
 /* Bloom */
 int show_id = 0;
-const int fire_id = 24;
+int fire_id = 26;
 GLuint bloomFb, bloomMaskFb;
 GLuint bloomDb, bloomMaskDb;
 GLuint bloomTexture, bloomMaskTexture;
@@ -207,15 +214,44 @@ GLuint program_bloom;
 GLuint program_black;
 
 /* Scene */
-int FerrisWheel = 0;
+int FerrisWheel = 0, modeID = 0;
+mat4 modelmatrix[12];
 GLuint Wheel_Vao1, Wheel_Vao2;
 GLuint Wheel_elebuf1, Wheel_elebuf2;
 GLuint Wheel_buffer1[3], Wheel_buffer2[3];
 HANDLE guiThread;
+int changeheight = 0;
+float zombieFactor = 0;
+const float FBX_SPEED = 2;
+int changeWorldFlag = 0;
+bool showdimflag[7]; 
+vec3 dimPosition[7];
+bool displayGirl = false;
 
 /* GUI */
 int createWindowFlag = 0;
 GLFWwindow* glfwwindow;
+float fogDensity = 0.035;
+
+/* Physical */
+bool PhysicalFlag = true;
+float physicalWalkingSpeed = 1.5;
+GLuint HeightMapFb, HeightMapDb, HeightMapTexture, program_height;
+GLuint MapBuffer[2], MapBuffer1[2], MapPersonBuffer, MapPersonBuffer1;
+mat4 mapMatrix;
+float centerx[2], centery[2], normalizationScale[2];
+GLuint mapVao[2], personVao;
+int PointsNUM[2];
+
+/*moving camera*/
+struct b_data {
+	vec3 eye;
+	vec3 track;
+};
+vector<b_data> roller_data;
+FILE *p;
+b_data b_tmp;
+
 
 // frame buffer
 GLuint fb_vao;
@@ -226,11 +262,16 @@ GLuint window_vertex_buffer;
 GLuint fboDataTexture;
 
 
+Phyengine phyengine[2];
 bool flying = false;
 bool walking = false;
 unsigned int phy_timer_speed = 10;
 bool birth = true;
 float sceneScale = 40.0;
+float speedScale = 3;
+bool GenTerrain = false;
+bool roller_play = false;
+Camera *camera[2];
 
 mat4 Scale(GLfloat a, GLfloat b, GLfloat c){
 	mat4 temp1 = {
@@ -344,13 +385,35 @@ void LoadSkybox() {
 	{
 		printf("%s\n", faces[face].c_str());
 		texture_data tex = load_jpg(faces[face].c_str());
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGB, tex.width, tex.height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex.data);
-		//if(tex.data != NULL)
-		//	delete[] tex.data;
+		
 	}
 
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	faces.clear();
+	faces.push_back("skybox/nightRight.png");
+	faces.push_back("skybox/nightLeft.png");
+	faces.push_back("skybox/nightBottom.png");
+	faces.push_back("skybox/nightTop.png");
+	faces.push_back("skybox/nightBack.png");
+	faces.push_back("skybox/nightFront.png");
+
+	glGenTextures(1, &night_texture);
+	//glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, night_texture);
+	for (int face = 0; face < 6; face++)
+	{
+		printf("%s\n", faces[face].c_str());
+		texture_data tex = load_png(faces[face].c_str());
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL_RGBA, tex.width, tex.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex.data);
+
+		/* 這2行要包在裡面 上面的skybox_texture也要 一定要改QQQQ*/
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	}
+	
 	//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	//    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -487,14 +550,19 @@ void Init_FBO(){
 	bloomMaskDb = createDepthTexture(image_size[0], image_size[1]);
 	unbindCurrentFrameBuffer();
 
+	HeightMapFb = createFramebuffer();
+	HeightMapTexture = createTextureAttachment(315, 279);
+	HeightMapDb = createDepthTexture(315, 279);
+	unbindCurrentFrameBuffer();
+
 }
 
-void createWaterProgram(){
-	program2 = glCreateProgram();
+void createProgram(GLuint &program, char* vs, char* fs){
+	program = glCreateProgram();
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource = loadShaderSource("ShaderSource/water.vs.glsl");
-	char** fragmentShaderSource = loadShaderSource("ShaderSource/water.fs.glsl");
+	char** vertexShaderSource = loadShaderSource(vs);
+	char** fragmentShaderSource = loadShaderSource(fs);
 	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
 	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
 	freeShaderSource(vertexShaderSource);
@@ -503,55 +571,12 @@ void createWaterProgram(){
 	glCompileShader(fragmentShader);
 	shaderLog(vertexShader);
 	shaderLog(fragmentShader);
-	glAttachShader(program2, vertexShader);
-	glAttachShader(program2, fragmentShader);
-	glLinkProgram(program2);
-	glUseProgram(program2);
-
-	dudvTexture = loadTexture(DUDV_MAP);
-	normalTexture = loadTexture(NOR_MAP);
-}
-void createBloomProgram(){
-	program_bloom = glCreateProgram();
-	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource = loadShaderSource("ShaderSource/bloom.vs.glsl");
-	char** fragmentShaderSource = loadShaderSource("ShaderSource/bloom.fs.glsl");
-	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
-	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
-	freeShaderSource(vertexShaderSource);
-	freeShaderSource(fragmentShaderSource);
-	glCompileShader(vertexShader);
-	glCompileShader(fragmentShader);
-	shaderLog(vertexShader);
-	shaderLog(fragmentShader);
-	glAttachShader(program_bloom, vertexShader);
-	glAttachShader(program_bloom, fragmentShader);
-	glLinkProgram(program_bloom);
-	glUseProgram(program_bloom);
-
+	glAttachShader(program, vertexShader);
+	glAttachShader(program, fragmentShader);
+	glLinkProgram(program);
+	glUseProgram(program);
 }
 
-void createBloomBlackProgram(){
-	program_black = glCreateProgram();
-	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource = loadShaderSource("ShaderSource/black.vs.glsl");
-	char** fragmentShaderSource = loadShaderSource("ShaderSource/black.fs.glsl");
-	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
-	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
-	freeShaderSource(vertexShaderSource);
-	freeShaderSource(fragmentShaderSource);
-	glCompileShader(vertexShader);
-	glCompileShader(fragmentShader);
-	shaderLog(vertexShader);
-	shaderLog(fragmentShader);
-	glAttachShader(program_black, vertexShader);
-	glAttachShader(program_black, fragmentShader);
-	glLinkProgram(program_black);
-	glUseProgram(program_black);
-
-}
 void My_Init()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -559,70 +584,26 @@ void My_Init()
 	glDepthFunc(GL_LEQUAL);
 
 	/* framebuffer water shader */
-	createWaterProgram();
-	createBloomProgram();
-	createBloomBlackProgram();
+	createProgram(program2, "ShaderSource/water.vs.glsl", "ShaderSource/water.fs.glsl");
+	dudvTexture = loadTexture(DUDV_MAP);
+	normalTexture = loadTexture(NOR_MAP);
+
+	createProgram(program_bloom, "ShaderSource/bloom.vs.glsl", "ShaderSource/bloom.fs.glsl");
+	createProgram(program_black, "ShaderSource/black.vs.glsl", "ShaderSource/black.fs.glsl");
+	createProgram(program_height, "ShaderSource/map.vs.glsl", "ShaderSource/map.fs.glsl");
 	Init_FBO();
 
 
 	/*skybox program init*/
-	skybox_program = glCreateProgram();
-	GLuint vertexShader3 = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader3 = glCreateShader(GL_FRAGMENT_SHADER);
-
-	char** vertexShaderSource3 = loadShaderSource("ShaderSource/skybox.vs.glsl");
-	char** fragmentShaderSource3 = loadShaderSource("ShaderSource/skybox.fs.glsl");
-
-	glShaderSource(vertexShader3, 1, vertexShaderSource3, NULL);
-	glShaderSource(fragmentShader3, 1, fragmentShaderSource3, NULL);
-	freeShaderSource(vertexShaderSource3);
-	freeShaderSource(fragmentShaderSource3);
-	glCompileShader(vertexShader3);
-	glCompileShader(fragmentShader3);
-	shaderLog(vertexShader3);
-	shaderLog(fragmentShader3);
-	glAttachShader(skybox_program, vertexShader3);
-	glAttachShader(skybox_program, fragmentShader3);
-	glLinkProgram(skybox_program);
-	glUseProgram(skybox_program);
+	createProgram(skybox_program, "ShaderSource/skybox.vs.glsl", "ShaderSource/skybox.fs.glsl");
 	LoadSkybox();
 
 	/*shadow depth program init*/
-	program_ShadowDepth = glCreateProgram();
-	GLuint vertexShader0 = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader0 = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource0 = loadShaderSource("ShaderSource/depth.vs.glsl");
-	char** fragmentShaderSource0 = loadShaderSource("ShaderSource/depth.fs.glsl");
-	glShaderSource(vertexShader0, 1, vertexShaderSource0, NULL);
-	glShaderSource(fragmentShader0, 1, fragmentShaderSource0, NULL);
-	freeShaderSource(vertexShaderSource0);
-	freeShaderSource(fragmentShaderSource0);
-	glCompileShader(vertexShader0);
-	glCompileShader(fragmentShader0);
-	shaderLog(vertexShader0);
-	shaderLog(fragmentShader0);
-	glAttachShader(program_ShadowDepth, vertexShader0);
-	glAttachShader(program_ShadowDepth, fragmentShader0);
-	glLinkProgram(program_ShadowDepth);
+	createProgram(program_ShadowDepth, "ShaderSource/depth.vs.glsl", "ShaderSource/depth.fs.glsl");
 	uniforms_light_mvp = glGetUniformLocation(program_ShadowDepth, "mvp");
 
 	/*render scene program init*/
-	program_RenderScene = glCreateProgram();
-	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource = loadShaderSource("ShaderSource/vertex.vs.glsl");
-	char** fragmentShaderSource = loadShaderSource("ShaderSource/fragment.fs.glsl");
-	glShaderSource(vertexShader, 1, vertexShaderSource, NULL);
-	glShaderSource(fragmentShader, 1, fragmentShaderSource, NULL);
-	freeShaderSource(vertexShaderSource);
-	freeShaderSource(fragmentShaderSource);
-	glCompileShader(vertexShader);
-	glCompileShader(fragmentShader);
-	shaderLog(vertexShader);
-	shaderLog(fragmentShader);
-	glAttachShader(program_RenderScene, vertexShader);
-	glAttachShader(program_RenderScene, fragmentShader);
-	glLinkProgram(program_RenderScene);
+	createProgram(program_RenderScene, "ShaderSource/vertex.vs.glsl", "ShaderSource/fragment.fs.glsl");
 	um4mvp = glGetUniformLocation(program_RenderScene, "um4mvp");
 	changeMode = glGetUniformLocation(program_RenderScene, "changemode");
 	iLocModel = glGetUniformLocation(program_RenderScene, "M");
@@ -647,27 +628,12 @@ void My_Init()
 	shadow_tex[1] = glGetUniformLocation(program_RenderScene, "shadow_tex1");
 	shadow_tex[2] = glGetUniformLocation(program_RenderScene, "shadow_tex2");
 	object_tex = glGetUniformLocation(program_RenderScene, "object_tex");
-	shadow_matrix0 = glGetUniformLocation(program_RenderScene, "shadow_matrix0");
-	shadow_matrix1 = glGetUniformLocation(program_RenderScene, "shadow_matrix1");
-	shadow_matrix2 = glGetUniformLocation(program_RenderScene, "shadow_matrix2");
+	shadow_matrix0 = glGetUniformLocation(program_RenderScene, "shadow_matrix[0]");
+	shadow_matrix1 = glGetUniformLocation(program_RenderScene, "shadow_matrix[1]");
+	shadow_matrix2 = glGetUniformLocation(program_RenderScene, "shadow_matrix[2]");
 
 	/*frame buffer program init*/
-	program_FrameBuffer = glCreateProgram();
-	GLuint vertexShader2 = glCreateShader(GL_VERTEX_SHADER);
-	GLuint fragmentShader2 = glCreateShader(GL_FRAGMENT_SHADER);
-	char** vertexShaderSource2 = loadShaderSource("ShaderSource/framebuffer.vs.glsl");
-	char** fragmentShaderSource2 = loadShaderSource("ShaderSource/framebuffer.fs.glsl");
-	glShaderSource(vertexShader2, 1, vertexShaderSource2, NULL);
-	glShaderSource(fragmentShader2, 1, fragmentShaderSource2, NULL);
-	freeShaderSource(vertexShaderSource2);
-	freeShaderSource(fragmentShaderSource2);
-	glCompileShader(vertexShader2);
-	glCompileShader(fragmentShader2);
-	shaderLog(vertexShader2);
-	shaderLog(fragmentShader2);
-	glAttachShader(program_FrameBuffer, vertexShader2);
-	glAttachShader(program_FrameBuffer, fragmentShader2);
-	glLinkProgram(program_FrameBuffer);
+	createProgram(program_FrameBuffer, "ShaderSource/framebuffer.vs.glsl", "ShaderSource/framebuffer.fs.glsl");
 	Shader_now_Loc = glGetUniformLocation(program_FrameBuffer, "shader_now");
 	Shader_Image_size = glGetUniformLocation(program_FrameBuffer, "img_size");
 	Shader_Compare = glGetUniformLocation(program_FrameBuffer, "CompareBarX");
@@ -711,6 +677,8 @@ void My_Init()
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	camera[0] = new Camera("Roller_Data_1.txt");
+	camera[1] = new Camera("Roller_Data_2.txt");
 }
 
 void BindingVao(GLuint &vao, GLuint *buffer, GLuint &elementbuffer, vector<tinyobj::shape_t> &shape, int flat, int i){
@@ -746,7 +714,104 @@ void BindingVao(GLuint &vao, GLuint *buffer, GLuint &elementbuffer, vector<tinyo
 	glEnableVertexAttribArray(2);
 }
 
-void My_LoadModels(char* filename, int flag)
+void GenMap(int mode){
+	vector<float> physicalMaps, HeightMaps;
+	//physical system
+	if (GenTerrain && mode == 0) {
+		phyengine[mode].GenMap();
+		phyengine[mode].GenTerrainFile("TransPark.txt");
+	}
+	else if (GenTerrain && mode == 1) {
+		phyengine[mode].GenMap();
+		phyengine[mode].GenTerrainFile("SecondPark.txt");
+	}
+	else if (mode == 0)
+		phyengine[mode].LoadTerrainFile("TransPark.txt");
+	else
+		phyengine[mode].LoadTerrainFile("SecondPark.txt");
+
+	phyengine[mode].PrintWidthHeight();
+
+	// 315, 279
+	map<array<int, 2>, vector<space>> m = phyengine[mode].GetTerrain();
+	float maxx, maxy, maxz;
+	float minx, miny, minz;
+	float dx, dy, dz;
+	maxx = minx = m.begin()->first[0];
+	minx = miny = m.begin()->first[1];
+	for (map<array<int, 2>, vector<space>>::iterator iterator = m.begin(); iterator != m.end(); iterator++){
+		GLfloat vx = iterator->first[0];
+		GLfloat vy = iterator->first[1];
+		if (vx > maxx) maxx = vx;  if (vx < minx) minx = vx;
+		if (vy > maxy) maxy = vy;  if (vy < miny) miny = vy;
+	}
+	//printf("max\n%f %f, %f %f, %f %f\n", maxx, minx, maxy, miny, maxz, minz);
+	dx = maxx - minx;
+	dy = maxy - miny;
+	//printf("dx,dy,dz = %f %f %f\n", dx, dy, dz);
+	normalizationScale[mode] = myMax(dx, dy) / 2;
+	centerx[mode] = (maxx + minx) / 2;
+	centery[mode] = (maxy + miny) / 2;
+	cout << "scale:: " << normalizationScale << endl;
+
+	cout << "centerx:: " << centerx << " centery:: " << centery << endl;
+
+	for (map<array<int, 2>, vector<space>>::iterator iterator = m.begin(); iterator != m.end(); iterator++) {
+		// iterator->first = key
+		// iterator->second = value
+		// Repeat if you also want to iterate through the second map.
+		float x = (float)iterator->first[0] * 1 / normalizationScale[mode] - centerx[mode] / normalizationScale[mode];
+		float y = (float)iterator->first[1] * 1 / normalizationScale[mode] - centery[mode] / normalizationScale[mode];
+		float z = (float)iterator->second.back().floor / phyengine[mode].GetHighest();
+
+		//if (z <= 0.4){
+		//	printf("holy shit!!!!!!!!!!!!   %f %f %f", x, y, z);
+		//	//z = 0.4;
+		//}
+		physicalMaps.push_back(x);
+		physicalMaps.push_back(-y);
+		HeightMaps.push_back(z);
+	}
+	cout << physicalMaps.size() << endl;
+	cout << HeightMaps.size() << endl;
+
+	glGenBuffers(1, &MapBuffer[mode]);
+	glBindBuffer(GL_ARRAY_BUFFER, MapBuffer[mode]);
+	glBufferData(GL_ARRAY_BUFFER, physicalMaps.size() * sizeof(float), &physicalMaps[0], GL_STATIC_DRAW);
+	glGenBuffers(1, &MapBuffer1[mode]);
+	glBindBuffer(GL_ARRAY_BUFFER, MapBuffer1[mode]);
+	glBufferData(GL_ARRAY_BUFFER, HeightMaps.size() * sizeof(float), &HeightMaps[0], GL_STATIC_DRAW);
+
+	glGenVertexArrays(1, &mapVao[mode]);
+	glBindVertexArray(mapVao[mode]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, MapBuffer[mode]);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, MapBuffer1[mode]);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 1 * sizeof(float), 0);
+	glEnableVertexAttribArray(1);
+
+	PointsNUM[mode] = HeightMaps.size();
+
+	glGenBuffers(1, &MapPersonBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, MapPersonBuffer);
+
+	glGenBuffers(1, &MapPersonBuffer1);
+	glBindBuffer(GL_ARRAY_BUFFER, MapPersonBuffer1);
+
+
+	/*
+	Green : 1
+	Blue : 
+	Red : 
+	土: 2 4 7
+	*/
+
+}
+
+void My_LoadModels(char* filename, int flag, int mode)
 {
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -774,17 +839,20 @@ void My_LoadModels(char* filename, int flag)
 
 
 		// Physical system
-		/*printf("Downloading terrain...\n");
-		for (int i = 0; i < shapes.size(); i++){
+		printf("Downloading terrain...\n");
+		if (GenTerrain == true && mode < 2 ) {
+			printf("Downloading terrain...\n");
+			for (int i = 0; i < shapes.size(); i++) {
 
-			for (int j = 0; j < shapes[i].mesh.indices.size(); j++){
-				int index = shapes[i].mesh.indices[j];
-				float trix = shapes[i].mesh.positions[index * 3];
-				float triy = shapes[i].mesh.positions[index * 3 + 1];
-				float triz = shapes[i].mesh.positions[index * 3 + 2];
-				phyengine.InsertMap(trix, triy, triz);
+				for (int j = 0; j < shapes[i].mesh.indices.size(); j++) {
+					int index = shapes[i].mesh.indices[j];
+					float trix = shapes[i].mesh.positions[index * 3];
+					float triy = shapes[i].mesh.positions[index * 3 + 1];
+					float triz = shapes[i].mesh.positions[index * 3 + 2];
+					phyengine[mode].InsertMap(trix, triy, triz);
+				}
 			}
-		}*/
+		}
 
 
 		for (int i = 0; i < materials.size(); i++)
@@ -887,23 +955,18 @@ void My_LoadModels(char* filename, int flag)
 			//	cout << obj.CenterPosition.x << " " << obj.CenterPosition.y << " " << obj.CenterPosition.z << endl;
 			//}
 			BindingVao(obj.vao, obj.buffer, obj.ele_buffer, shapes, i, i);
-
-			if (i == 23 || i == 26){
-
-				int flat = (i == 23) ? 26 : 23;
-
-				if (i == 23){
-					BindingVao(Wheel_Vao1, Wheel_buffer1, Wheel_elebuf1, shapes, flat, i);
-					
+			if (mode == 0){
+				if (i == 25 || i == 28){
+					int flat = (i == 25) ? 28 : 25;
+					if (i == 25)
+						BindingVao(Wheel_Vao1, Wheel_buffer1, Wheel_elebuf1, shapes, flat, i);
+					else
+						BindingVao(Wheel_Vao2, Wheel_buffer2, Wheel_elebuf2, shapes, flat, i);
 				}
-				else{
-					BindingVao(Wheel_Vao2, Wheel_buffer2, Wheel_elebuf2, shapes, flat, i);
-					
-				}
-
 			}
 
 			obj.indexSize = shapes[i].mesh.indices.size();
+
 			objects.push_back(obj);
 
 			firsts.push_back(indexOffset);
@@ -940,15 +1003,12 @@ void My_LoadModels(char* filename, int flag)
 	texIndex.push_back(subtextureINDEX);
 	LightingMaterials.push_back(thieObjMat);
 
-
-
-	//physical system
-	/*phyengine.GenMap();
-	phyengine.MakeDataFile();
-	phyengine.GenTerrain();*/
-
+	if (mode < 2){
+		GenMap(mode);
+	}
 
 }
+
 float g_fps(void(*func)(void), int n_frame)
 {
 	clock_t start, finish;
@@ -971,19 +1031,20 @@ float g_fps(void(*func)(void), int n_frame)
 }
 
 mat4 DrawShadow(int flag){
-	vector<OBJ_SHADER> objects = models[0];
+	vector<OBJ_SHADER> objects = models[modeID];
 	GLuint* subtextureINDEX;
 	vector<MaterialParameters> thisObjMat;
 	mat4 newMVP;
 	mat4 shadow_sbpv_matrix;
-	mat4 model_matrix = translate(mat4(), vec3(0, 0, 0)) * scale(mat4(), vec3(40));
+	mat4 model_matrix = modelmatrix[modeID];
 	//for (int i = 0; i < 3; i++){
 	vec3 light_position = directionlight->GetLightPosition();
 	light_position = vec3(light_position.x, light_position.y, light_position.z);
 
 	// X軸
-	mat4 light_proj_matrix = frustum(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 10000.0f + flag * 2000);
-	mat4 light_view_matrix = lookAt(light_position, vec3(light_position.x, light_position.y, 5000.0f), vec3(0.0f, 1.0f, 0.0f));
+	mat4 light_proj_matrix = frustum(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 20000.0f + 5000 * flag);//5000.0f + flag * 5000);
+	mat4 light_view_matrix = lookAt(light_position, vec3(light_position.x, light_position.y, -5000.0f), vec3(0.0f, 1.0f, 0.0f));
+	//mat4 light_view_matrix = lookAt(cameraEyes, vec3(cameraEyes.x, cameraEyes.y, -5000.0f), vec3(0.0f, 1.0f, 0.0f));
 
 	// Y 軸
 	//mat4 light_proj_matrix = frustum(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 5000.0f + flag * 1000);
@@ -1035,6 +1096,7 @@ mat4 DrawShadow(int flag){
 
 	return shadow_sbpv_matrix;
 }
+
 void UpdateView()
 {
 
@@ -1070,9 +1132,16 @@ void UpdateView()
 }
 
 void Display_skybox(){
+	glUseProgram(skybox_program);
+	glUniform1i(glGetUniformLocation(skybox_program, "tex_cubemap"), 0);
+	glUniform1i(glGetUniformLocation(skybox_program, "nightMap"), 1);
+	glUniform1f(glGetUniformLocation(skybox_program, "timeFactor"), timeFactor);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, skybox_texture);
-	glUseProgram(skybox_program);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, night_texture);
+
 	glDisable(GL_DEPTH_TEST);
 	mat4 mvp = perspective(radians(65.0f), 1.0f, 0.1f, 300.0f);
 	mvp = mvp * CameraViewMatrix;
@@ -1086,31 +1155,45 @@ void Display_skybox(){
 
 }
 
-void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_id)
+void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int disa_id, int fbxflag)
 {
 	vector<OBJ_SHADER> objects = models[id];
 	GLuint* subtextureINDEX = texIndex[id];
 	vector<MaterialParameters> thisObjMat = LightingMaterials[id];
+
+	mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
+	mat4 model_matrix;
+	if (id != 3)model_matrix = modelmatrix[id];
+	else model_matrix = translate(mat4(), girlEyes) * scale(mat4(), vec3(2)) * rotate(mat4(), radians(90.0f), vec3(1, 0, 0));
+	mymvp = mymvp * CameraViewMatrix * model_matrix;
+	glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
+	glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "M"), 1, GL_FALSE, value_ptr(model_matrix));
+	glUniform1i(glGetUniformLocation(program_bloom, "water_id"), water_id);
+	glUniform4fv(glGetUniformLocation(program_RenderScene, "plane"), 1, plane);
+	glUniform1f(glGetUniformLocation(program_RenderScene, "fogDensity"), fogDensity);
+	if (fbxflag != -1){
+		vector<tinyobj::shape_t> new_shapes;
+
+		GetFbxAnimation(myFbx[fbxflag], new_shapes, (double)zombieFactor ); // The Last Parameter is A Float in [0, 1], Specifying The Animation Location You Want to Retrieve
+		for (int i = 0; i < new_shapes.size(); i++)
+		{
+			glBindBuffer(GL_ARRAY_BUFFER, models[id][0].buffer[0]);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, new_shapes[i].mesh.positions.size() * sizeof(float), &new_shapes[i].mesh.positions[0]);
+		}
+	}
 	for (int i = 0; i < objects.size(); i++){
-		if (i != water_id){
-
-			mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
-			mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2])) ;
-
-			mymvp = mymvp * CameraViewMatrix * model_matrix;
-			//mvp = mvp * viewMatriid * translate(mat4(), vec3(0, 60, 0))* rotate(mat4(), radians(180.0f), vec3(0,0,1)) * rotate(mat4(), radians(90.0f), vec3(1,0,0));
-			glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
-			glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "M"), 1, GL_FALSE, value_ptr(model_matrix));
+		if (i != disa_id){
+		//if (i == show_id){
+			
 			glUniform1i(glGetUniformLocation(program_RenderScene, "shape_id"), i);
-			glUniform4fv(glGetUniformLocation(program_RenderScene, "plane"), 1, plane);
 			
 			int flag = 0;
-			if (FerrisWheel == 0){
-				if (i == 23){
+			if (FerrisWheel == 0 && modeID == 0){
+				if (i == 25){
 					glBindVertexArray(Wheel_Vao1);
 					flag = 1;
 				}
-				else if (i == 26){
+				else if (i == 28){
 					glBindVertexArray(Wheel_Vao2);
 					flag = 1;
 				}
@@ -1133,14 +1216,14 @@ void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_
 				glUniform4fv(iLocMSpecular, 1, thisObjMat[matID].specular);
 				glUniform1f(iLocMShininess, thisObjMat[matID].shininess);
 
-				if (flag == 1){
-					if (i == 23){
+				if (flag == 1 && modeID == 0){
+					if (i == 25){
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Wheel_elebuf1);
-						glDrawElements(GL_TRIANGLES, (objects[26].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[26].materialIterator[k] * sizeof(float)));
+						glDrawElements(GL_TRIANGLES, (objects[28].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[28].materialIterator[k] * sizeof(float)));
 					}
 					else{
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Wheel_elebuf2);
-						glDrawElements(GL_TRIANGLES, (objects[23].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[23].materialIterator[k] * sizeof(float)));
+						glDrawElements(GL_TRIANGLES, (objects[25].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[25].materialIterator[k] * sizeof(float)));
 					}
 				}
 				else{
@@ -1155,21 +1238,22 @@ void Display_model(int id, vec3 pos, float* scale_bias, float* plane, int water_
 	}
 
 }
+
 void Display_bloom(int id, vec3 pos, float* scale_bias){
 	vector<OBJ_SHADER> objects = models[id];
 	GLuint* subtextureINDEX = texIndex[id];
 	vector<MaterialParameters> thisObjMat = LightingMaterials[id];
 	
 	//int i = fire_id;
-	
+
+	mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
+	mat4 model_matrix = modelmatrix[id];
+	mymvp = mymvp * CameraViewMatrix * model_matrix;
+	glUniformMatrix4fv(glGetUniformLocation(program_bloom, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
+	glUniform1i(glGetUniformLocation(program_bloom, "fire_id"), fire_id);
 	for (int i = 0; i < objects.size(); i++){
 		if (i != water_id){
-			
-			mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
-			mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2]));
-			mymvp = mymvp * CameraViewMatrix * model_matrix;
-			//mvp = mvp * viewMatriid * translate(mat4(), vec3(0, 60, 0))* rotate(mat4(), radians(180.0f), vec3(0,0,1)) * rotate(mat4(), radians(90.0f), vec3(1,0,0));
-			glUniformMatrix4fv(glGetUniformLocation(program_bloom, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
+
 			glUniform1i(glGetUniformLocation(program_bloom, "shape_id"), i);
 
 			glBindVertexArray(objects[i].vao);
@@ -1200,18 +1284,18 @@ void Display_texture(GLuint texture, GLuint vao, GLuint program, vec2 t, vec2 s)
 
 }
 
-
-void Display_water(int id, int j, vec3 pos, float* scale_bias, float* plane, GLuint reflectionTex, GLuint refractionTex){
+void Display_water(int id, vec3 pos, float* scale_bias, float* plane, GLuint reflectionTex, GLuint refractionTex){
 	vector<OBJ_SHADER> objects = models[id];
 	GLuint* subtextureINDEX = texIndex[id];
 	vector<MaterialParameters> thisObjMat = LightingMaterials[id];
 
 	mat4 mymvp = perspective(radians(65.0f), 1.0f, 3.0f, 3000.0f);
-	mat4 model_matrix = translate(mat4(), pos) * scale(mat4(), vec3(scale_bias[0], scale_bias[1], scale_bias[2]));
+	mat4 model_matrix = modelmatrix[id];
 	mymvp = mymvp * CameraViewMatrix * model_matrix;
 	glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "um4mvp"), 1, GL_FALSE, value_ptr(mymvp));
 	glUniformMatrix4fv(glGetUniformLocation(program_RenderScene, "M"), 1, GL_FALSE, value_ptr(model_matrix));
 	glUniform1i(glGetUniformLocation(program_RenderScene, "shape_id"), water_id);
+	glUniform1i(glGetUniformLocation(program_RenderScene, "water_id"), water_id);
 	glUniform4fv(glGetUniformLocation(program_RenderScene, "plane"), 1, plane);
 	glUniform1i(glGetUniformLocation(program_RenderScene, "reflectionTexture"), 4);
 	glUniform1i(glGetUniformLocation(program_RenderScene, "refractionTexture"), 5);
@@ -1221,10 +1305,10 @@ void Display_water(int id, int j, vec3 pos, float* scale_bias, float* plane, GLu
 	glUniform3fv(glGetUniformLocation(program_RenderScene, "cameraPosition"), 1, value_ptr(cameraEyes));
 	glBindVertexArray(objects[water_id].vao);
 	
-	for (int k = objects[j].materialID.size() - 1; k >= 0; k--){
-		int matID = objects[j].materialID[k];
+	for (int k = objects[water_id].materialID.size() - 1; k >= 0; k--){
+		int matID = objects[water_id].materialID[k];
 		//glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect_draw_buffer);
-		glBindVertexArray(objects[j].vao);
+		glBindVertexArray(objects[water_id].vao);
 
 		//glBindTexture(GL_TEXTURE_2D, subtextureINDEX[matID]);
 		glActiveTexture(GL_TEXTURE4);
@@ -1240,9 +1324,9 @@ void Display_water(int id, int j, vec3 pos, float* scale_bias, float* plane, GLu
 		glUniform4fv(iLocMSpecular, 1, thisObjMat[matID].specular);
 		glUniform1f(iLocMShininess, thisObjMat[matID].shininess);
 
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects[j].ele_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects[water_id].ele_buffer);
 
-		glDrawElements(GL_TRIANGLES, (objects[j].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[j].materialIterator[k] * sizeof(float)));
+		glDrawElements(GL_TRIANGLES, (objects[water_id].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[water_id].materialIterator[k] * sizeof(float)));
 		//glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, NUM_DRAWS, 0);
 	}
 
@@ -1255,71 +1339,54 @@ static void error_callback(int error, const char* description)
 	fprintf(stderr, "Error %d: %s\n", error, description);
 }
 
-void Display_GUI(void *p){
-
-
-	if (createWindowFlag != 1){
-
-		glfwSetErrorCallback(error_callback);
-		glfwInit();
-		glfwwindow = glfwCreateWindow(400, 400, "User interface", NULL, NULL);
-		glfwSetWindowPos(glfwwindow, 0, 100);
-		glfwMakeContextCurrent(glfwwindow);
-		// Setup ImGui binding
-		ImGui_ImplGlfw_Init(glfwwindow, true);
-		createWindowFlag = 1;
-		 
-	}
-
-	while (!glfwWindowShouldClose(glfwwindow)){
-		glfwPollEvents();
-		ImGui_ImplGlfw_NewFrame();
-		const char* test = "test";
-		bool* p_open = NULL;
-		ImVec4 clear_color = ImColor(114, 144, 154);
-		ImGui::Begin(test, p_open, ImVec2(400, 400), -1.0f, 0);
-		{
-			ImGui::SetWindowPos(ImVec2(0, 0));
-			static float f = 0.0f;
-			ImGui::Text("Hello, this is a teapot story. :) \nWelcome to our world!");
-			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
-			ImGui::ColorEdit3("clear color", (float*)&clear_color);
-
-			if (ImGui::Button("Water color effect")) showSelect = 11;
-			if (ImGui::Button("Ride the roller coaster"));
-			if (ImGui::Button("Ride the Ferris wheel"));
-
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-		}
-		ImGui::End();
-		//// Rendering
-		//int display_w, display_h;
-		//glfwGetFramebufferSize(glfwwindow, &display_w, &display_h);
-		//glViewport(0, 0, display_w, display_h);
-		glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-		glClear(GL_COLOR_BUFFER_BIT);
-		ImGui::Render();
-		glfwSwapBuffers(glfwwindow);
-		SuspendThread(guiThread);
-	}
-	
-	// Cleanup
-	ImGui_ImplGlfw_Shutdown();
-	glfwTerminate();
-
-}
-
 // GLUT callback. Called to draw the scene.
 void My_Display()
 {
+	//x 194 218
+	//z 284 197
+	//y 106 130
+	if (modeID == 0){
+		if (camera[0]->GetBIndex() >= 110 && camera[0]->GetBIndex() <= 116 && roller_play == true){
+			waterHeight = 105.0;
+			spotlight->ChangeOpenStatus(1);
+			spotlight2->ChangeOpenStatus(1);
+			spotlight3->ChangeOpenStatus(1);
+			changeheight = 1;
+		}
+		else if (cameraEyes.x >= 194 && cameraEyes.x <= 240 && cameraEyes.y >= 106 && cameraEyes.y <= 130 && 
+			cameraEyes.z >= 197 && cameraEyes.z <= 284 && roller_play == false){
+			waterHeight = 105.0;
+			spotlight->ChangeOpenStatus(1);
+			spotlight2->ChangeOpenStatus(1);
+			spotlight3->ChangeOpenStatus(1);
+			changeheight = 1;
+		}
+		else if(changeheight == 1){
+			waterHeight = 10.0;
+			spotlight->ChangeOpenStatus(0);
+			spotlight2->ChangeOpenStatus(0);
+			spotlight3->ChangeOpenStatus(0);
+			changeheight = 0;
+		}
+		for (int i = 0; i < 5; i++){
+			if (showdimflag[i] == false && cameraEyes.x >= dimPosition[i].x - 8.0f && cameraEyes.x <= dimPosition[i].x + 8.0f
+				&& cameraEyes.y >= dimPosition[i].y - 8.0f && cameraEyes.y <= dimPosition[i].y + 8.0f
+				&& cameraEyes.z >= dimPosition[i].z - 8.0f && cameraEyes.z <= dimPosition[i].z + 8.0f)
+				showdimflag[i] = true;
+		}
+	}
+	else{
+		for (int i = 5; i < 7; i++){
+			if (showdimflag[i] == false && cameraEyes.x >= dimPosition[i].x - 8.0f && cameraEyes.x <= dimPosition[i].x + 8.0f
+				&& cameraEyes.y >= dimPosition[i].y - 8.0f && cameraEyes.y <= dimPosition[i].y + 8.0f
+				&& cameraEyes.z >= dimPosition[i].z - 8.0f && cameraEyes.z <= dimPosition[i].z + 8.0f)
+				showdimflag[i] = true;
+		}
+	}
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// program_RenderScene :: Depth texture (for shader)
-
-	vector<OBJ_SHADER> objects = models[0];
-	GLuint* subtextureINDEX;
-	vector<MaterialParameters> thisObjMat;
 	mat4 newMVP;
 	vec3 bais = vec3(40);
 	vec4 plane = vec4(0, -1, 0, waterHeight);
@@ -1328,13 +1395,54 @@ void My_Display()
 	mat4 shadow_sbpv_matrix1 = DrawShadow(1);
 	mat4 shadow_sbpv_matrix2 = DrawShadow(2);
 
+	// HeightMap
+	bindFrameBuffer(HeightMapFb, 315, 279);
+	glClearColor(0.6f, 0.3f, 1.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	//Display_skybox();
+	coord pos = phyengine[modeID].GetPersonPosition(cameraEyes.x / sceneScale, cameraEyes.z / sceneScale);
+	float tmp[2];
+	tmp[0] = (pos.x / normalizationScale[modeID] - centerx[modeID] / normalizationScale[modeID]);
+	tmp[1] = -(pos.y / normalizationScale[modeID] - centery[modeID] / normalizationScale[modeID]);
+
+	glUseProgram(program_height);
+	//glUniformMatrix4fv(glGetUniformLocation(program_height, "model"), 1, GL_FALSE, value_ptr(mapMatrix));
+	glUniform1i(glGetUniformLocation(program_height, "shapeID"), 1);
+	glBindVertexArray(mapVao[modeID]);
+	//glPointSize(40.0f);
+	glDrawArrays(GL_POINTS, 0, PointsNUM[modeID]);
+
+	glGenVertexArrays(1, &personVao);
+	glBindVertexArray(personVao);
+
+	glUniform1i(glGetUniformLocation(program_height, "shapeID"), 0);
+
+	//glGenBuffers(1, &MapPersonBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, MapPersonBuffer);
+	glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(float), &tmp, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
+	glEnableVertexAttribArray(0);
+	float red = 0.5;
+	//glGenBuffers(1, &MapPersonBuffer1);
+	glBindBuffer(GL_ARRAY_BUFFER, MapPersonBuffer1);
+	glBufferData(GL_ARRAY_BUFFER, 1 * sizeof(float), &red, GL_STATIC_DRAW);
+	glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 1 * sizeof(float), 0);
+	glEnableVertexAttribArray(1);
+	glPointSize(10.0f);
+	glDrawArrays(GL_POINTS, 0, 1);
+
+	unbindCurrentFrameBuffer();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
 	// Bloom Effect
 	bindFrameBuffer(bloomFb, image_size[0], image_size[1]);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	
 	glUseProgram(program_bloom);
-	Display_bloom(0, vec3(0), value_ptr(bais));
+	Display_bloom(modeID, vec3(0), value_ptr(bais));
 
 	unbindCurrentFrameBuffer();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1358,13 +1466,14 @@ void My_Display()
 	float distance = 2 * (cameraEyes.y - waterHeight);
 	cameraEyes.y -= distance;
 	pitch_x = -pitch_x;
+	roll_z = -roll_z;
 	UpdateView();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	Display_skybox();
 	glUseProgram(program_RenderScene);
 	bais = vec3(40);
 	plane = vec4(0, 1, 0, -waterHeight);
-	Display_model(0, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), 3);
+	Display_model(modeID, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), water_id, -1);
 	unbindCurrentFrameBuffer();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1372,6 +1481,7 @@ void My_Display()
 	///* set the camera back to original */
 	cameraEyes.y += distance;
 	pitch_x = -pitch_x;
+	
 	UpdateView();
 	// refraction framebuffer
 	bindFrameBuffer(refractionFb, image_size[0], image_size[1]);
@@ -1379,7 +1489,7 @@ void My_Display()
 	Display_skybox();
 	glUseProgram(program_RenderScene);
 	plane = vec4(0, -1, 0, waterHeight);
-	Display_model(0, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), 3);
+	Display_model(modeID, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), water_id, -1);
 	unbindCurrentFrameBuffer();
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1396,7 +1506,8 @@ void My_Display()
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	
 	// program_RenderScene :: Display skybox
-
+	roll_z = -roll_z;
+	UpdateView();
 	Display_skybox();
 
 	// program_RenderScene :: Render Scene
@@ -1434,46 +1545,40 @@ void My_Display()
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, depth_tex[2]);
 	glActiveTexture(GL_TEXTURE3);
-
-	
-	objects = models[0];
-	subtextureINDEX = texIndex[0];
-	thisObjMat = LightingMaterials[0];
-	
+		
 	glUniform1i(changeMode, changing);
 	glUniformMatrix4fv(shadow_matrix0, 1, GL_FALSE, value_ptr(shadow_sbpv_matrix0));
 	glUniformMatrix4fv(shadow_matrix1, 1, GL_FALSE, value_ptr(shadow_sbpv_matrix1));
 	glUniformMatrix4fv(shadow_matrix2, 1, GL_FALSE, value_ptr(shadow_sbpv_matrix2));
-	//for (int j = 0; j < objects.size(); j++){
-	//	if (j != 3) {
-	//		for (int k = objects[j].materialID.size() - 1; k >= 0; k--){
-	//			int matID = objects[j].materialID[k];
-	//			//glBindBuffer(GL_DRAW_INDIRECT_BUFFER, indirect_draw_buffer);
-	//			glBindVertexArray(objects[j].vao);
 
-	//			glBindTexture(GL_TEXTURE_2D, subtextureINDEX[matID]);
-
-	//			glUniform4fv(iLocMAmbient, 1, thisObjMat[matID].ambient);
-	//			glUniform4fv(iLocMDiffuse, 1, thisObjMat[matID].diffuse);
-	//			glUniform4fv(iLocMSpecular, 1, thisObjMat[matID].specular);
-	//			glUniform1f(iLocMShininess, thisObjMat[matID].shininess);
-
-	//			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, objects[j].ele_buffer);
-
-	//			glDrawElements(GL_TRIANGLES, (objects[j].materialIterator[k + 1]), GL_UNSIGNED_INT, (void*)(objects[j].materialIterator[k] * sizeof(float)));
-	//			//glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, NULL, NUM_DRAWS, 0);
-	//		}
-	//	}
-	//}
 	bais = vec3(40, 40, 40);
 	plane = vec4(0, -1, 0, 10000);
 	glDisable(GL_CLIP_DISTANCE0);
-	Display_model(0, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1);
-	Display_water(0, 3, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), reflectionTexture, refractionTexture);
+	
+	Display_model(modeID, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, -1);
+	Display_model(2, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, 0);
+	if (displayGirl == true) Display_model(3, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, 1);
+	if (modeID == 0){
+		for (int i = 0; i < 5; i++){
+			if(showdimflag[i] == false)
+				Display_model(4+i, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, -1);
+		}
+	}
+	else{
+		for (int i = 5; i < 7; i++){
+			if (showdimflag[i] == false)
+				Display_model(4 + i, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, -1);
+		}
+	}
+	Display_water(modeID, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), reflectionTexture, refractionTexture);
 
-	/*glActiveTexture(GL_TEXTURE0);
-	Display_texture(bloomMaskTexture, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
-	Display_texture(refractionTexture, fb_vao, program2, vec2(0.5, 0.5), vec2(0.25, 0.25));*/
+	glActiveTexture(GL_TEXTURE0);
+	glDisable(GL_DEPTH_TEST);
+	Display_texture(HeightMapTexture, fb_vao, program2, vec2(-0.75, 0.75), vec2(0.25, 0.25));
+	//Display_texture(refractionTexture, fb_vao, program2, vec2(-0.5, 0.5), vec2(0.25, 0.25));
+	//Display_texture(reflectionTexture, fb_vao, program2, vec2(0.5, 0.5), vec2(0.25, 0.25));
+	glEnable(GL_DEPTH_TEST);
+	/*Display_texture(refractionTexture, fb_vao, program2, vec2(0.5, 0.5), vec2(0.25, 0.25));*/
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1551,11 +1656,28 @@ void My_Reshape(int width, int height)
 	Init_FBO();
 }
 
+void setWorldOne(){
+	modeID = 0;
+	water_id = 5;
+	fire_id = 26;
+	waterHeight = 49;
+}
+void setWorldTwo(){
+	modeID = 1;
+	water_id = 4;
+	fire_id = 26;
+	waterHeight = 46;
+	// 293 128 -315
+}
+
 void My_Timer(int val)
 {
 	moveFactor += WAVE_SPEED * timer_speed / 1000;
 	moveFactor = mod(moveFactor, 1.0f);
+	zombieFactor += FBX_SPEED * timer_speed / 1000;
+	zombieFactor = mod(zombieFactor, 1.0f);
 	timer_cnt++;
+	if (rollerplayer_cnt > 0) rollerplayer_cnt++;
 	if (timer_cnt > 119) timer_cnt = 0;
 	if (timer_cnt % 20 == 0){
 		FerrisWheel = (FerrisWheel == 0) ? 1 : 0;
@@ -1565,89 +1687,128 @@ void My_Timer(int val)
 	{
 		glutTimerFunc(timer_speed, My_Timer, val);
 	}
+
+	/* Skybox */
+	if (timeFlag == true && DayNightOnOff == true){
+		timeFactor += TIME_SPEED * timer_speed / 1000;
+		vec3 a = pointlight->getLightAmbient();
+		a.x -= TIME_SPEED * timer_speed * (0.265 / 1000);
+		a.y -= TIME_SPEED * timer_speed * (0.265 / 1000);
+		a.z -= TIME_SPEED * timer_speed * (0.225 / 1000);
+		pointlight->SetLightAmbient(a);
+		if (timeFactor >= 1) {
+			timeFlag = false;
+			timeFactor = 1;
+		}
+	}
+	else if (timeFlag == false && DayNightOnOff == true){
+		timeFactor -= TIME_SPEED * timer_speed / 1000;
+		vec3 a = pointlight->getLightAmbient();
+		a.x += TIME_SPEED * timer_speed * (0.265 / 1000);
+		a.y += TIME_SPEED * timer_speed * (0.265 / 1000);
+		a.z += TIME_SPEED * timer_speed * (0.225 / 1000);
+		pointlight->SetLightAmbient(a);
+		if (timeFactor <= 0) {
+			// change to day
+			timeFactor = 0;
+			timeFlag = true;
+		}
+	}
+	//printf("time %f flag %d\n", timeFactor, timeFlag);
+	if (roller_play == true){
+		rollerplayer_cnt++;
+		Roller_data RD = camera[modeID]->RollerPlay(modeID, speedScale);
+		int fog_start = 145;
+		int connect_point = 156;
+		if (camera[modeID]->GetBIndex() > fog_start && camera[modeID]->GetBIndex() < connect_point && fogDensity <= 0.5f) {
+			fogDensity += 0.035f;
+			changeWorldFlag = 1;
+			cout << "fog ++" << " ";
+		}
+		else if ((camera[modeID]->GetBIndex() > connect_point || modeID == 1) && fogDensity >= 0.035f) {
+			if (changeWorldFlag == 1){
+				camera[1]->SetSpeed(camera[0]->GetSpeed());
+				setWorldTwo();
+			}
+			changeWorldFlag = 0;
+			fogDensity -= 0.035f;
+			cout << "fog --" << " ";
+		}
+
+		if (RD.eye.x > -10000){
+			cameraEyes = RD.eye;
+			pitch_x = RD.track.x;
+			yaw_y = RD.track.y;
+			roll_z = RD.track.z;
+		}
+		else{
+			roller_play = false;
+			rollerplayer_cnt = 0;
+		}
+		//cout << "roller player cnt :: " << rollerplayer_cnt << endl;
+	}
 	
 }
 
+bool countSpace = false;
+int spaceTime = 0;
 void Phy_timer(int val){
-	const float speed = 0.3f;
-	/*printf("eyeX: %f, eyeY: %f, eyeZ: %f\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
-	printf("pitch_x: %f, yaw_y: %f, roll_z: %f\n", pitch_x, yaw_y, roll_z);*/
-	float dx = 0, dy = 0, dz = 0;
-	float step = 0.75;
-	coord shake;
-	shake.x = 0;
-	shake.y = 0;
-	if (walking && !flying){
-		shake = phyengine.Walk();
-		dx = shake.x;
-	}
-
-	/*if (rollerCoasterStart){
-		if (rollerFirstStart){
-			Section firstSection = camera.GetStart();
-			eyeVector.x = firstSection.x;
-			eyeVector.y = firstSection.y;
-			eyeVector.z = firstSection.z;
-			rollerFirstStart = false;
+	if (PhysicalFlag == true){
+		phyengine[modeID].SetSpeed(speedScale);
+		if (countSpace) {
+			spaceTime++;
 		}
-		Movement movement = camera.Roller();
-		dz = movement.movement / speed;
-		pitch_x = movement.pitch_x;
-		yaw_y = movement.yaw_y;
-		roll_z = movement.roll_z;
-	}*/
-
-	switch (moving_state) {
-	case FORWARD:
-		dz += step;
-		break;
-	case BACKWARD:
-		dz -= step;
-		break;
-	case LEFTWARD:
-		dx -= step;
-		break;
-	case RIGHTWARD:
-		dx += step;
-		break;
-	case UPWARD:
-		dy += step;
-		break;
-	case DOWNWARD:
-		dy -= step;
-		break;
-	default:
-		break;
-	}
-
-	mat4 mat = CameraViewMatrix;
-	vec3 forward(mat[0][2], mat[1][2], mat[2][2]);
-	vec3 side(mat[0][0], mat[1][0], mat[2][0]);
-	vec3 up(mat[0][1], mat[1][1], mat[2][1]);
-
-	vec3 tempEyeVector = cameraEyes + (-dz * forward + dx * side + dy * up) * speed;
-
-	float temp = phyengine.Collision(tempEyeVector.x / sceneScale, (tempEyeVector.y - (5 - shake.y)) / sceneScale, tempEyeVector.z / sceneScale) * sceneScale + (5 - shake.y);
-	//cameraEyes = tempEyeVector;
-	if(temp - tempEyeVector.y < 0.15 * sceneScale || birth){
-		if(birth)
-			tempEyeVector.y = temp;
-		cameraEyes = tempEyeVector;
-		if(temp - tempEyeVector.y > 0.05){
-			cameraEyes.y = phyengine.SmoothClimb(cameraEyes.y);
+		const float speed = 0.3f;
+		float dx = 0, dy = 0, dz = 0;
+		float step;
+		if (!flying)
+			step = 0.75 * speedScale;
+		else
+			step = 1.5 * speedScale;
+		coord shake;
+		shake.x = 0;
+		shake.y = 0;
+		if (walking && !flying){
+			shake = phyengine[modeID].Walk();
+			dx = shake.x;
 		}
-		else if(temp > tempEyeVector.y)
-			tempEyeVector.y = temp;
-		else if(!flying)
-			cameraEyes.y = phyengine.Gravity(cameraEyes.y);
-	}
-	else{
 
-	}
+		switch (moving_state) {
+		case FORWARD:
+			dz += step;
+			break;
+		case BACKWARD:
+			dz -= step;
+			break;
+		case LEFTWARD:
+			dx -= step;
+			break;
+		case RIGHTWARD:
+			dx += step;
+			break;
+		case UPWARD:
+			dy += step;
+			break;
+		case DOWNWARD:
+			dy -= step;
+			break;
+		default:
+			break;
+		}
 
-	birth = false;
-	UpdateView();
-	glutTimerFunc(phy_timer_speed, Phy_timer, val);
+		mat4 mat = CameraViewMatrix;
+		vec3 forward(mat[0][2], mat[1][2], mat[2][2]);
+		vec3 side(mat[0][0], mat[1][0], mat[2][0]);
+		vec3 up(mat[0][1], mat[1][1], mat[2][1]);
+
+
+		vec3 tempEyeVector = cameraEyes + (-dz * forward + dx * side + dy * up) * speed;
+		cameraEyes = phyengine[modeID].World(tempEyeVector / sceneScale, cameraEyes / sceneScale, flying, birth) * sceneScale;
+
+		birth = false;
+		UpdateView();
+		glutTimerFunc(phy_timer_speed, Phy_timer, val);
+	}
 }
 
 void KeyUp(unsigned char key, int x, int y) {
@@ -1656,6 +1817,20 @@ void KeyUp(unsigned char key, int x, int y) {
 		walking = false;
 	}
 	switch (key){
+	case ' ':
+		if (countSpace) {
+			countSpace = false;
+			if (spaceTime < 75) {
+				if (!flying)
+					flying = true;
+				else
+					flying = false;
+			}
+			spaceTime = 0;
+		}
+		else
+			countSpace = true;
+		break;
 	default:
 		break;
 	}
@@ -1722,7 +1897,7 @@ void onMouseMotion(int x, int y)
 		yaw_y += mouseX_Sensitivity * mouse_delta.x;
 		pitch_x += mouseY_Sensitivity * mouse_delta.y;
 
-		printf("x: %f, y: %f, z: %f\n", pitch_x, yaw_y, roll_z);
+		//printf("x: %f, y: %f, z: %f\n", pitch_x, yaw_y, roll_z);
 		mouse_position[0] = x;
 		mouse_position[1] = y;
 		UpdateView();
@@ -1746,8 +1921,8 @@ void My_Keyboard(unsigned char key, int x, int y)
 	float dx = 0; //how much we strafe on x
 	float dz = 0; //how much we walk on z
 	float dy = 0;
+	Roller_data RD;
 	switch (key) {
-
 	/*case 'w':
 		walking = true;
 		moving_state = FORWARD;
@@ -1760,51 +1935,56 @@ void My_Keyboard(unsigned char key, int x, int y)
 		break;
 	case 'd':
 		moving_state = RIGHTWARD;
+		break;*/
+	case '4':
+		/*RD = camera.GetStartPoint();
+		cameraEyes = RD.eye;
+		pitch_x = RD.track.x;
+		yaw_y = RD.track.y;
+		roll_z = RD.track.z;*/
+		if (roller_play)
+			roller_play = false;
+		else
+			roller_play = true;
 		break;
 	case ' ':
-		moving_state = UPWARD;
+		//if (PhysicalFlag == true) 
+			moving_state = UPWARD;
+			dy = 1;
+		break;
+	case 'w':
+		if (PhysicalFlag == true){
+			walking = true;
+			moving_state = FORWARD;
+		}else
+			dz = 2;
+		break;
+	case 's':
+		if (PhysicalFlag == true) moving_state = BACKWARD;
+		else dz = -2;
+		break;
+	case 'a':
+		if (PhysicalFlag == true) moving_state = LEFTWARD;
+		else dx = -2;
+		break;
+	case 'd':
+		if (PhysicalFlag == true) moving_state = RIGHTWARD;
+		else dx = 2;
+		break;
+	case 'z':
+		if (PhysicalFlag == true) moving_state = UPWARD;
+		else dy = 2;
 		break;
 	case 'x':
-		moving_state = DOWNWARD;
+		if (PhysicalFlag == true) moving_state = DOWNWARD;
+		else dy = -2;
 		break;
 	case 'b':
 		if (flying)
 			flying = false;
 		else
 			flying = true;
-		break;*/
-	case 'w':
-	{
-				dz = 2;
-				break;
-	}
-
-	case 's':
-	{
-				dz = -2;
-				break;
-	}
-	case 'a':
-	{
-				dx = -2;
-				break;
-	}
-
-	case 'd':
-	{
-				dx = 2;
-				break;
-	}
-	case 'z':
-	{
-				dy = 2;
-				break;
-	}
-	case 'x':
-	{
-				dy = -2;
-				break;
-	}
+		break;
 	/*case 'r':
 		camera.Restart();
 		rollerFirstStart = true;
@@ -1871,26 +2051,57 @@ void My_Keyboard(unsigned char key, int x, int y)
 	case 'm':
 		directionlight->SetLightPosition(vec3(0, -20, 0));
 		break;
+	case 'y':
+		b_tmp.eye = cameraEyes;
+		b_tmp.track.x = pitch_x;
+		b_tmp.track.y = yaw_y;
+		b_tmp.track.z = roll_z;
+		printf("%f, %f, %f, %f, %f, %f\n", cameraEyes.x, cameraEyes.y, cameraEyes.z, pitch_x, yaw_y, roll_z);
+		roller_data.push_back(b_tmp);
+		break;
+	case 't':
+		p = fopen("Roller_Data_2.txt", "w");
+		for (int i = 0; i < roller_data.size(); i++) {
+			fprintf(p, "%f %f %f %f %f %f\n", roller_data[i].eye.x, roller_data[i].eye.y, roller_data[i].eye.z,
+				roller_data[i].track.x, roller_data[i].track.y, roller_data[i].track.z);
+		}
+		fclose(p);
+		break;
+	case 'r':
+		roller_data.pop_back();
+		break;
+	case 'q':
+		rollerplayer_cnt = 0;
+		//modeID = 0;
+		camera[0]->Restart();
+		camera[1]->Restart();
+		break;
 	default:
 		break;
 	}
 	vec3 light_position = directionlight->GetLightPosition();
 	cout << light_position.x << " " << light_position.y << " " << light_position.z << endl;
 
-	//get current view matrix
-	mat4 mat = CameraViewMatrix;
-	//row major
-	vec3 forward(mat[0][2], mat[1][2], mat[2][2]);
-	vec3 side(mat[0][0], mat[1][0], mat[2][0]);
-	vec3 up(mat[0][1], mat[1][1], mat[2][1]);
+	if (PhysicalFlag == false){
+		//get current view matrix
+		mat4 mat = CameraViewMatrix;
+		//row major
+		vec3 forward(mat[0][2], mat[1][2], mat[2][2]);
+		vec3 side(mat[0][0], mat[1][0], mat[2][0]);
+		vec3 up(mat[0][1], mat[1][1], mat[2][1]);
 
-	const float speed = 2.0f;//how fast we move
+		const float speed = 2.0f;//how fast we move
 
 
-	cameraEyes += (-dz * forward + dx * side + dy * up) * speed;
+		cameraEyes += (-dz * forward + dx * side + dy * up) * speed;
+		
+		//printf("eyeX: %lf, eyeY: %lf, eyeZ: %lf\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
+		//update the view matrix
+		UpdateView();
+	}
+
+	girlEyes = cameraEyes + girlVector;
 	printf("eyeX: %lf, eyeY: %lf, eyeZ: %lf\n", cameraEyes.x, cameraEyes.y, cameraEyes.z);
-	//update the view matrix
-	UpdateView();
 }
 
 void My_SpecialKeys(int key, int x, int y)
@@ -1909,6 +2120,12 @@ void My_SpecialKeys(int key, int x, int y)
 		show_id--;
 		if (show_id < 0) show_id = 45;
 		break;
+	/*case GLUT_KEY_LEFT:
+		roll_z -= 5.0f;
+		break;
+	case GLUT_KEY_RIGHT:
+		roll_z += 5.0f;
+		break;*/
 	default:
 		break;
 	}
@@ -1991,6 +2208,9 @@ void My_Menu(int id)
 	case Shader_Ink:
 		showSelect = 16;
 		break;
+	case Shader_Toon:
+		showSelect = 17;
+		break;
 	default:
 		break;
 	}
@@ -2016,23 +2236,11 @@ void initTextures(char* name, int flag)
 	glGenerateMipmap(GL_TEXTURE_2D);
 	free_texture_data(tdata);
 	printf("%s %d %d", name, tdata.width, tdata.height);
-	// load png
-	/*tdata = load_png("nthu.png"); // return width * height * 4 uchars
-	if (tdata.data == 0)
-	{
-	// load failed
-	return;
-	}
-	glGenTextures(1, &texture_png);
-	glBindTexture(GL_TEXTURE_2D, texture_png);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tdata.width, tdata.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tdata.data); // Use GL_RGBA
-	glGenerateMipmap(GL_TEXTURE_2D);
-	free_texture_data(tdata);*/
+
 }
 void setLightingSource(){
 
-	vec4 ambient = { 0.1f, 0.1f, 0.1f, 1 };
+	vec4 ambient = { 0.3f, 0.3f, 0.26f, 1 };
 	vec4 diffuse = { 0.03f, 0.03f, 0.03f, 1 };
 	vec4 specular = { 0.5, 0.5, 0.5, 1 };
 	//vec4 position = { -300.0f, 2202.0f, -44.0f, 1 };
@@ -2040,46 +2248,222 @@ void setLightingSource(){
 	pointlight = new Lighting(0, 1);
 	pointlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 
-	ambient = { 0.5f, 0.5f, 0.5f, 1 };
+	ambient = { 0.5f, 0.5f, 0.44f, 1 };
 	diffuse = { 0.01f, 0.01f, 0.01f, 1 };
 	specular = { 1, 1, 1, 1 };
-	//position = { -900.0f, 404.0f, -44.0f, 0 };
-	//position = { 420.0f, 5344.0f, -44.0f, 0 };
-	//position = { 9.77f, 406.2f, -95.8f, 0 };
-	//position = { -943.0f, 694.0f, -18.0f, 0 };
-	position = { -490.0f, 694.0f, -651.0f, 0 };
-	directionlight = new Lighting(1, 1);
+	//position = { -490.0f, 694.0f, -651.0f, 0 };
+	position = { 402.2f, 800.2f, 659.2f, 0 };
+	directionlight = new Lighting(1, 0);
 	directionlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 
 	ambient = { 1.0f, 1.0f, 1.0f, 1 };
 	diffuse = { 1.0f, 1.0f, 1.0f, 1 };
 	specular = { 1, 1, 1, 1 };
-	//position = { -410.2f, 206.2f, 4.2f, 1 };
-	position = { 245.624f, 95.0f, 6.0f, 1 };
-	spotlight = new Lighting(2, 1);
+	//position = { 322.2f, 139.2f, 549.2f, 1 };
+	//position = { 245.624f, 95.0f, 6.0f, 1 };
+	position = { 213, 165, 206, 1 };
+	spotlight = new Lighting(2, 0);
 	spotlight->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 	spotlight->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
 
-	position = { 260.624f, 95.0f, 6.0f, 1 };
-	spotlight2 = new Lighting(3, 1);
+	//position = { 260.624f, 95.0f, 6.0f, 1 };
+	position = { 198, 165, 205, 1 };
+	spotlight2 = new Lighting(3, 0);
 	spotlight2->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 	spotlight2->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
 
-	position = { 230.624f, 95.0f, 6.0f, 1 };
-	spotlight3 = new Lighting(4, 1);
+	//position = { 230.624f, 95.0f, 6.0f, 1 };
+	position = { 228, 165, 206, 1 };
+	spotlight3 = new Lighting(4, 0);
 	spotlight3->SetLight(value_ptr(ambient), value_ptr(diffuse), value_ptr(specular), value_ptr(position));
 	spotlight3->SetSpotLight(vec3(0.0f, -40.2f, 0.0f), 900.0f, 350.5f);
 }
 void initParas(){
-	cameraEyes =  { -40.0f, 76.0f, 71.2f };
-	cameraCenter = { -93.59f, 206.2f, 100.0f };
+	//cameraEyes =  { -40.0f, 76.0f, 71.2f };
+	cameraEyes = { -382.0f, 164.0f, -295.2f };
+	cameraCenter = { 0.0f, 164.0f, -295.2f };
 	rotate_vector = { 0, 0, 0 };
 	upVector = { 0, 1, 0 };
+	girlEyes = cameraEyes + vec3(0,10,0);
+
+	dimPosition[0] = vec3(-98, 81, 349);
+	dimPosition[1] = vec3(28, 154, 295);
+	dimPosition[2] = vec3(-360, 105, -297);
+	dimPosition[3] = vec3(-82, 48, -158);
+	dimPosition[4] = vec3(-387, 220, 66);
+
+	dimPosition[5] = vec3(-145, 62, 184);
+	dimPosition[6] = vec3(-215, 62, 36);
+
+	for (int i = 0; i < 7; i++)
+		showdimflag[i] = false;
+
 	initTextures("ImageProcessTexture/noise2.jpg", 1);
 	initTextures("ImageProcessTexture/diffuse.jpg", 2);
 	CameraViewMatrix = lookAt(cameraEyes, cameraCenter, vec3(0.0f, 1.0f, 0.0f));
 	setLightingSource();
 }
+
+void DayNightBtn(){
+	for (int i = 0; i < 3; i++)
+	{
+		if (i > 0) ImGui::SameLine();
+		ImGui::PushID(i);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(i / 7.0f, 0.6f, 0.6f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(i / 7.0f, 0.7f, 0.7f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(i / 7.0f, 0.8f, 0.8f));
+		if (i == 0){
+			if (ImGui::Button("Day")) {
+				timeFactor = 0;
+				timeFlag = true;
+				vec3 a = pointlight->getLightAmbient();
+				a = vec3(0.3f, 0.3f, 0.26f);
+				pointlight->SetLightAmbient(a);
+			}
+		}
+
+		else if (i == 1){
+			if (ImGui::Button("Night")){
+				timeFactor = 1;
+				timeFlag = false;
+				vec3 a = pointlight->getLightAmbient();
+				a = vec3(0.035f);
+				pointlight->SetLightAmbient(a);
+			}
+		}else
+		if (ImGui::Button("Effect On/ Off")) DayNightOnOff = (DayNightOnOff == true) ? false : true;
+
+		ImGui::PopStyleColor(3);
+		ImGui::PopID();
+	}
+}
+  
+void Display_GUI(void *p){
+
+
+	if (createWindowFlag != 1){
+
+		glfwSetErrorCallback(error_callback);
+		glfwInit();
+		glfwwindow = glfwCreateWindow(400, 800, "User interface", NULL, NULL);
+		glfwSetWindowPos(glfwwindow, 10, 100);
+		glfwMakeContextCurrent(glfwwindow);
+		// Setup ImGui binding
+		ImGui_ImplGlfw_Init(glfwwindow, true);
+		createWindowFlag = 1;
+
+	}
+
+	while (!glfwWindowShouldClose(glfwwindow)){
+		glfwPollEvents();
+		ImGui_ImplGlfw_NewFrame();
+		const char* test = "test";
+		bool* p_open = NULL;
+		ImVec4 clear_color = ImColor(114, 144, 154);
+		ImGui::Begin(test, p_open, ImVec2(400, 800), -1.0f, 0);
+		{
+				ImGui::SetWindowPos(ImVec2(0, 0));
+				ImGui::Text("Hello, this is a teapot story. :) \nWelcome to our world!");
+				ImGui::Spacing();
+				if (ImGui::CollapsingHeader("Setting"))
+				{
+					if (ImGui::Button("On/ Off physical system")){ 
+						if (PhysicalFlag == true)
+							PhysicalFlag = false;
+						else { 
+							glutTimerFunc(phy_timer_speed, Phy_timer, 0);
+							PhysicalFlag = true;
+						}
+					}
+					ImGui::SameLine(); ImGui::InputFloat("Speed", &speedScale);
+					ImGui::SliderFloat("Fog Density", &fogDensity, 0.0007f, 1.0f);
+					//ImGui::SliderInt("Water Height", &tmpHeight, 0, 80); waterHeight = tmpHeight;
+					//ImGui::InputFloat("Water Height", &waterHeight, 0.0f, 80.0f); 
+					ImGui::DragFloat("Water Height", &waterHeight, 0.2f, 0.0f, 80.0f);
+					vec3 a = pointlight->getLightAmbient();
+					//ImGui::InputFloat3("Direction light ambient", value_ptr(a));
+					ImGui::DragFloat3("pointlight ambient", value_ptr(a), 0.005f, 0.0f, 1.0f);
+					pointlight->SetLightAmbient(a);
+					DayNightBtn();
+					/*ImGui::Spacing();
+					ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);*/
+				}
+				if (ImGui::CollapsingHeader("Interaction"))
+				{
+					if (ImGui::Button("Ride the roller coaster")){
+						roller_play = true;
+					}
+					if (ImGui::Button("Third person view")) { 
+						girlVector = vec3(-30,-30,30);
+						cameraEyes -= girlVector;
+						PhysicalFlag = false;
+						displayGirl = true;
+					}
+					if (ImGui::Button("Fisrt Person view")) { 
+						cameraEyes += girlVector;
+						girlVector = vec3(0, 10, 0);
+						glutTimerFunc(phy_timer_speed, Phy_timer, 0);
+						PhysicalFlag = true;
+						displayGirl = false;
+					}
+					if (ImGui::Button("World ONE")) setWorldOne();
+					ImGui::SameLine(); if (ImGui::Button("World TWO")) setWorldTwo();
+				}
+				if (ImGui::CollapsingHeader("Image Processing"))
+				{
+					if (ImGui::Button("Original Effect")) showSelect = 0;
+					if (ImGui::Button("Quantization Effect")) showSelect = 1;
+					if (ImGui::Button("DoG Effect")) showSelect = 2;
+					if (ImGui::Button("Image Abstraction Effect")) showSelect = 3;
+					if (ImGui::Button("Red-Blue Stereo Effect")) showSelect = 4;
+					if (ImGui::Button("Sharpness Filter")) showSelect = 5;
+					if (ImGui::Button("Laplacian Filter")) showSelect = 6;
+					if (ImGui::Button("Pixelation Effect")) showSelect = 8;
+					if (ImGui::Button("Bloom Effect")) showSelect = 7;
+					if (ImGui::Button("WaterColor Effect")) showSelect = 11;
+					if (ImGui::Button("Constant Effect")) showSelect = 9;
+					if (ImGui::Button("Embossion Effect")) showSelect = 10;
+					if (ImGui::Button("Swing Effect")) showSelect = 12;
+					if (ImGui::Button("Ripple Filter")) showSelect = 13;
+					if (ImGui::Button("Frosted Glass Filter")) showSelect = 14;
+					if (ImGui::Button("Oil Painting Effect")) showSelect = 15;
+					if (ImGui::Button("Ink Painting Effect")) showSelect = 16;
+					if (ImGui::Button("Toon Effect")) showSelect = 17;
+				}
+				if (ImGui::CollapsingHeader("Collection"))
+				{
+					ImGui::Checkbox("Diamond 1", &showdimflag[0]);
+					ImGui::Checkbox("Diamond 2", &showdimflag[1]);
+					ImGui::Checkbox("Diamond 3", &showdimflag[2]);
+					ImGui::Checkbox("Diamond 4", &showdimflag[3]);
+					ImGui::Checkbox("Diamond 5", &showdimflag[4]);
+					ImGui::Checkbox("Diamond 6", &showdimflag[5]);
+					ImGui::Checkbox("Diamond 7", &showdimflag[6]);
+				}
+				ImGui::Spacing();
+				ImGui::TextWrapped("Once upon a time, there is a little girl, she has parents who love her very much.But accident happened, her parents died, leaving the little girl alone. Her parents had told her that they put the most important thing in a teapot and put it in a TRANS PARK, the little girl have to find the pieces of diamond and find the teapot.\n");
+	
+			
+		}
+		ImGui::End();
+		//// Rendering
+		//int display_w, display_h;
+		//glfwGetFramebufferSize(glfwwindow, &display_w, &display_h);
+		//glViewport(0, 0, display_w, display_h);
+		glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+		glClear(GL_COLOR_BUFFER_BIT);
+		ImGui::Render();
+		glfwSwapBuffers(glfwwindow);
+		SuspendThread(guiThread);
+	}
+
+	// Cleanup
+	ImGui_ImplGlfw_Shutdown();
+	glfwTerminate();
+
+}
+
+
 int main(int argc, char *argv[])
 {
 
@@ -2088,9 +2472,9 @@ int main(int argc, char *argv[])
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
 
-	glutInitWindowPosition(200, 100);
+	glutInitWindowPosition(400, 100);
 	glutInitWindowSize(1200, 720);
-	glutCreateWindow("Assignment 03 102062222"); // You cannot use OpenGL functions before this line; The OpenGL context must be created first by glutCreateWindow()!
+	glutCreateWindow("Teapot Story"); // You cannot use OpenGL functions before this line; The OpenGL context must be created first by glutCreateWindow()!
 	
 	glewInit();
 	ilInit();
@@ -2099,7 +2483,20 @@ int main(int argc, char *argv[])
 	dumpInfo();
 	initParas();
 	My_Init();
-	My_LoadModels("final.obj", 1);
+
+	My_LoadModels("final_world.obj", 1, 0); modelmatrix[0] = scale(mat4(), vec3(40));
+	My_LoadModels("second_world.obj", 1, 1); modelmatrix[1] = scale(mat4(), vec3(40));
+	My_LoadModels("zombie_fury.FBX", 2, 2); modelmatrix[2] = translate(mat4(), vec3(122, 156, 293.5f)) * scale(mat4(), vec3(0.6)) 
+		* rotate(mat4(), radians(90.0f), vec3(-1,0,0));
+	My_LoadModels("girl5.FBX", 2, 3); modelmatrix[3] = translate(mat4(), cameraEyes) * scale(mat4(), vec3(2)) * rotate(mat4(), radians(90.0f), vec3(1, 0, 0));
+	My_LoadModels("diamond.obj", 1, 4); modelmatrix[4] = translate(mat4(), dimPosition[0]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 5); modelmatrix[5] = translate(mat4(), dimPosition[1]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 6); modelmatrix[6] = translate(mat4(), dimPosition[2]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 7); modelmatrix[7] = translate(mat4(), dimPosition[3]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 8); modelmatrix[8] = translate(mat4(), dimPosition[4]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 9); modelmatrix[9] = translate(mat4(), dimPosition[5]) * scale(mat4(), vec3(15));
+	My_LoadModels("diamond.obj", 1, 10); modelmatrix[10] = translate(mat4(), dimPosition[6]) * scale(mat4(), vec3(15));
+	//126 156 294 
 	//My_LoadModels("Volleyball.FBX",2);
 	//My_LoadModels("Island/island.fbx", 2 );
 	//My_LoadModels("zombie_fury.FBX", 2);
@@ -2126,7 +2523,7 @@ int main(int argc, char *argv[])
 	glutAddMenuEntry("Stop", MENU_TIMER_STOP);
 
 	glutSetMenu(shader);
-	glutAddMenuEntry("Blur", Shader_Blur);
+	glutAddMenuEntry("Normal", Shader_Blur);
 	glutAddMenuEntry("Quantization", Shader_Quantization);
 	glutAddMenuEntry("DoG", Shader_DoG);
 	glutAddMenuEntry("Image Abstraction", Shader_CombineBasic);
@@ -2146,6 +2543,7 @@ int main(int argc, char *argv[])
 	glutAddMenuEntry("Frosted Glass Effect", Shader_FrostedGlass);
 	glutAddMenuEntry("Oil Painting Effect", Shader_Oilpainting);
 	glutAddMenuEntry("Water Ink Effect", Shader_Ink);
+	glutAddMenuEntry("Toon Effect", Shader_Toon);
 	glutSetMenu(menu_main);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 	////////////////////////////
@@ -2161,13 +2559,11 @@ int main(int argc, char *argv[])
 	glutTimerFunc(timer_speed, My_Timer, 0);
 
 
-	//glutKeyboardUpFunc(KeyUp);
-	//glutTimerFunc(phy_timer_speed, Phy_timer, 0);
+	glutKeyboardUpFunc(KeyUp);
+	glutTimerFunc(phy_timer_speed, Phy_timer, 0);
 	///////////////////////////////
 
-
-	/*thread nthread(Display_GUI);
-	nthread.join();*/
+ 
 	guiThread = (HANDLE)_beginthread(Display_GUI, 0, NULL);
 
 	// Enter main event loop.

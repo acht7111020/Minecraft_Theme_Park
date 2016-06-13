@@ -83,6 +83,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="fbxloader.cpp" />
     <ClCompile Include="GUI\imgui.cpp" />
     <ClCompile Include="GUI\imgui_demo.cpp" />
@@ -94,6 +95,7 @@
     <ClCompile Include="tinyobjloader.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="fbxloader.h" />
     <ClInclude Include="GUI\imconfig.h" />
     <ClInclude Include="GUI\imgui.h" />
@@ -115,6 +117,8 @@
     <None Include="ShaderSource\fragment.fs.glsl" />
     <None Include="ShaderSource\framebuffer.fs.glsl" />
     <None Include="ShaderSource\framebuffer.vs.glsl" />
+    <None Include="ShaderSource\map.fs.glsl" />
+    <None Include="ShaderSource\map.vs.glsl" />
     <None Include="ShaderSource\skybox.fs.glsl" />
     <None Include="ShaderSource\skybox.vs.glsl" />
     <None Include="ShaderSource\vertex.vs.glsl" />
