@@ -1556,13 +1556,14 @@ void My_Display()
 	glDisable(GL_CLIP_DISTANCE0);
 	
 	Display_model(modeID, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, -1);
-	Display_model(2, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, 0);
+	
 	if (displayGirl == true) Display_model(3, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, 1);
 	if (modeID == 0){
 		for (int i = 0; i < 5; i++){
 			if(showdimflag[i] == false)
 				Display_model(4+i, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, -1);
 		}
+		Display_model(2, vec3(0, 0, 0), value_ptr(bais), value_ptr(plane), -1, 0);
 	}
 	else{
 		for (int i = 5; i < 7; i++){
